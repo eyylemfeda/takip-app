@@ -19,19 +19,36 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setErr(error.message);
       else router.replace('/');
-    } else {
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) { setErr(error.message); return; }
-
-      // ✅ Emniyet upsert (profil satırı açmak için)
-      const userId = data.user?.id;
-      if (userId) {
-        await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id' });
-      }
-
-      alert('Kayıt başarılı! E-postanı kontrol et, doğrulama yapman gerekebilir.');
-      router.replace('/');
+      return;
     }
+
+    // === SIGN UP ===
+    const origin =
+  (typeof window !== 'undefined' && window.location.origin) ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  'https://takip-app.vercel.app';
+
+const { data, error: signUpError } = await supabase.auth.signUp({
+  email,
+  password,
+  options: {
+    emailRedirectTo: `${origin}/auth/callback?next=/auth/success`,
+  },
+});
+
+if (signUpError) {
+  setErr(signUpError.message);
+  return;
+}
+
+    // Profil satırı aç (idempotent)
+    const userId = data.user?.id;
+    if (userId) {
+      await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id' });
+    }
+
+    alert('Kayıt başarılı! E-postandaki doğrulama bağlantısına tıkla, sonra otomatik giriş yapılacak.');
+    router.replace('/'); // istersen burada /login bırakıp “mailini kontrol et” ekranı gösterebilirsin
   };
 
   return (
@@ -73,20 +90,14 @@ export default function LoginPage() {
           {mode === 'login' ? (
             <p>
               Hesabın yok mu?{' '}
-              <button
-                className="text-blue-600 underline"
-                onClick={() => setMode('signup')}
-              >
+              <button className="text-blue-600 underline" onClick={() => setMode('signup')}>
                 Kayıt Ol
               </button>
             </p>
           ) : (
             <p>
               Zaten üye misin?{' '}
-              <button
-                className="text-blue-600 underline"
-                onClick={() => setMode('login')}
-              >
+              <button className="text-blue-600 underline" onClick={() => setMode('login')}>
                 Giriş Yap
               </button>
             </p>
