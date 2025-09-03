@@ -15,7 +15,6 @@ const RAD = Math.PI / 180;
 function renderPieLabel({
   cx, cy, midAngle, innerRadius, outerRadius, value,
 }: any) {
-  // Dilimin tam ortasına yakın bir yarıçap
   const r = innerRadius + (outerRadius - innerRadius) * 0.55;
   const x = cx + r * Math.cos(-midAngle * RAD);
   const y = cy + r * Math.sin(-midAngle * RAD);
@@ -24,7 +23,7 @@ function renderPieLabel({
     <text
       x={x}
       y={y}
-      fill="#fff"                 // beyaz, sabit ve net görünsün
+      fill="#fff"
       textAnchor="middle"
       dominantBaseline="middle"
       fontSize={12}
@@ -35,15 +34,12 @@ function renderPieLabel({
   );
 }
 
-
 // bugüne göre deterministik seçim (her gün farklı görünsün)
 function getTodayQuote() {
   const today = new Date();
-  // İstersen gün + ay + yıl kullanarak daha geniş döngü sağlayabilirsin
   const index = (today.getFullYear() + today.getMonth() + today.getDate()) % QUOTES.length;
   return QUOTES[index];
 }
-
 
 /* ---------- Yardımcı zaman fonksiyonları ---------- */
 function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
@@ -53,11 +49,15 @@ function startOfWeekMonday() {
   d.setDate(d.getDate() + diff); return d;
 }
 function startOfYear() { const d = new Date(); d.setHours(0,0,0,0); d.setMonth(0,1); return d; }
-function startOfMonth() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(1);
-  return d;
+function startOfMonth() { const d = new Date(); d.setHours(0,0,0,0); d.setDate(1); return d; }
+// 01:00'da başlayan "gün" için YYYY-MM-DD anahtarı
+function dayKey01() {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(1, 0, 0, 0);          // bugün 01:00
+  if (now < start) start.setDate(start.getDate() - 1); // 01:00'dan önceyse bir önceki gün
+  const isoLocal = new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString();
+  return isoLocal.slice(0, 10);        // YYYY-MM-DD
 }
 
 /* ---------- Tipler ---------- */
@@ -70,7 +70,7 @@ type Book = {
   total_pages: number | null;
   cover_url: string | null;
   is_finished: boolean | null;
-  status?: 'active' | 'paused' | 'finished' | null; // varsa kullanılır
+  status?: 'active' | 'paused' | 'finished' | null;
   created_at: string;
   updated_at: string | null;
 };
@@ -78,7 +78,6 @@ type Book = {
 /* ---------- Renk paleti ---------- */
 const COLORS = ['#4F46E5','#10B981','#F59E0B','#EF4444','#3B82F6','#8B5CF6','#14B8A6','#F97316','#6366F1','#84CC16'];
 
-// Sabit ders sırası
 const SUBJECT_ORDER = [
   "Fen Bilimleri",
   "Matematik",
@@ -89,14 +88,10 @@ const SUBJECT_ORDER = [
   "Din Kültürü ve Ahlak Bilgisi",
 ];
 
-// Bazı dersler için kısa label (grafik/legend'ta kullanacağız)
 const SHORT_LABEL: Record<string, string> = {
   'Din Kültürü ve Ahlak Bilgisi': 'Din Kültürü',
   'T.C. İnkılap Tarihi': 'İnkılap Tarihi',
-  // İstersen başka kısa etiketler de ekleyebilirsin:
-  // 'T.C. İnkılap Tarihi': 'T.C. İnkılap Tar.',
 };
-
 
 /* ================================================================== */
 /*                           ANA SAYFA COMPONENT                       */
@@ -121,10 +116,9 @@ export default function Home() {
       if (!id) return;
 
       const today0Iso = startOfToday().toISOString();
-      // --- AYLIK & YILLIK OKUMA TOPLAMLARI (reading_logs.pages) ---
       const m0 = startOfMonth();
       const y0 = startOfYear();
-      
+
       /** BU AY biten kitap sayısı */
       {
         const { count: mCount, error: mErr } = await supabase
@@ -133,7 +127,6 @@ export default function Home() {
           .eq('user_id', id)
           .eq('is_finished', true)
           .gte('finished_at', m0.toISOString());
-
         if (!mErr) setMonthBooks(mCount ?? 0);
       }
 
@@ -145,7 +138,6 @@ export default function Home() {
           .eq('user_id', id)
           .eq('is_finished', true)
           .gte('finished_at', y0.toISOString());
-
         if (!yErr) setYearBooks(yCount ?? 0);
       }
 
@@ -160,15 +152,20 @@ export default function Home() {
       }
 
       // Bugün (records)
-      supabase.from('records')
-        .select('id,created_at,subjects(name),question_count,duration_min,note,activity_date,off_calendar')
-        .eq('user_id', id)
-        .not('question_count', 'is', null)
-        .or(`activity_date.gte.${today0Iso.slice(0,10)},and(activity_date.is.null,created_at.gte.${today0Iso})`)
-        .eq('off_calendar', false)
-        .order('created_at', { ascending: false })
-        .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>()
-        .then(({ data }) => setTodayRecs((data ?? []) as any));
+      // 🔸 Günün (01:00–01:00) tarihi
+        const dayKey = dayKey01();
+
+        // Bugün (records) — sadece takvimli kayıtlar, activity_date == dayKey
+        supabase.from('records')
+          .select('id,created_at,subjects(name),question_count,duration_min,note,activity_date,off_calendar')
+          .eq('user_id', id)
+          .not('question_count', 'is', null)
+          .eq('off_calendar', false)
+          .eq('activity_date', dayKey)     // ← 01:00 gün anahtarı
+          .order('created_at', { ascending: false })
+          .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>()
+          .then(({ data }) => setTodayRecs((data ?? []) as any));
+
 
       // Tüm records (grafikler)
       supabase.from('records')
@@ -178,12 +175,11 @@ export default function Home() {
         .order('created_at', { ascending: false })
         .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>()
         .then(({ data }) => setAllRecs((data ?? []) as any));
-
-        
     })();
   }, []);
 
   /* ---------- Grafik verileri ---------- */
+  const dayKey = useMemo(() => dayKey01(), []); // "YYYY-MM-DD", gün 01:00'da başlar
   const today0 = startOfToday().getTime();
   const week0  = startOfWeekMonday().getTime();
 
@@ -201,7 +197,9 @@ export default function Home() {
       agg.total[name] = (agg.total[name] || 0) + q;
       if (r.off_calendar) continue;
       if (t >= week0)  agg.week[name]  = (agg.week[name]  || 0) + q;
-      if (t >= today0) agg.today[name] = (agg.today[name] || 0) + q;
+      if (r.activity_date === dayKey) {
+      agg.today[name] = (agg.today[name] || 0) + q;
+    }
     }
     const names = Array.from(new Set([
       ...Object.keys(agg.total), ...Object.keys(agg.week), ...Object.keys(agg.today),
@@ -209,16 +207,8 @@ export default function Home() {
     return { agg, names };
   }, [allRecs, today0, week0]);
 
-  const weeklyTotal = Object.values(bySubject.agg.week).reduce(
-  (sum, val) => sum + val,
-  0
-);
-
-  const overallTotal = Object.values(bySubject.agg.total).reduce(
-  (sum, val) => sum + val,
-  0
-);
-
+  const weeklyTotal = Object.values(bySubject.agg.week).reduce((sum, val) => sum + val, 0);
+  const overallTotal = Object.values(bySubject.agg.total).reduce((sum, val) => sum + val, 0);
 
   const todayTotal = useMemo(
     () => todayRecs.reduce((a, r) => a + (r.question_count ?? 0), 0),
@@ -236,24 +226,20 @@ export default function Home() {
   }, [todayRecs]);
 
   const nameToColor = useMemo(() => {
-  const map: Record<string, string> = {};
-  SUBJECT_ORDER.forEach((n, i) => { map[n] = COLORS[i % COLORS.length]; });
-  return map;
-}, []);
+    const map: Record<string, string> = {};
+    SUBJECT_ORDER.forEach((n, i) => { map[n] = COLORS[i % COLORS.length]; });
+    return map;
+  }, []);
 
+  const weeklyData = useMemo(() => (
+    SUBJECT_ORDER
+      .map((name) => ({ name, value: bySubject.agg.week[name] || 0 }))
+      .filter((item) => item.value > 0)
+  ), [bySubject]);
 
-  // Haftalık: sadece > 0 olan dersler
-const weeklyData = useMemo(() => (
-  SUBJECT_ORDER
-    .map((name) => ({ name, value: bySubject.agg.week[name] || 0 }))
-    .filter((item) => item.value > 0)
-), [bySubject]);
-
-// Toplam: tüm dersler (0 olsa da listede)
-const totalData = useMemo(() => (
-  SUBJECT_ORDER.map((name) => ({ name, value: bySubject.agg.total[name] || 0 }))
-), [bySubject]);
-
+  const totalData = useMemo(() => (
+    SUBJECT_ORDER.map((name) => ({ name, value: bySubject.agg.total[name] || 0 }))
+  ), [bySubject]);
 
   /* ---------- Bar etiketleri / tooltip ---------- */
   const BarRightLabel = (props: any) => {
@@ -275,9 +261,9 @@ const totalData = useMemo(() => (
   const goalDone = hasGoal && todayTotal >= (dailyGoal as number);
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="mx-auto max-w-none md:max-w-5xl px-1 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
       {/* === AKTİF KİTAPLAR (üstte) === */}
-      <section className="rounded-xl border bg-white p-4 shadow-sm">
+      <section className="rounded-xl border bg-white px-2 pt-1 pb-2 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
           <h2 className="text-xl font-semibold">Okuma Kitabım</h2>
           <p className="text-sm text-gray-500">
@@ -293,35 +279,28 @@ const totalData = useMemo(() => (
       {/* === GÜNLÜK (liste + pasta) === */}
       <section className="grid gap-4 md:grid-cols-3">
         {/* Sol: Günlük liste */}
-        <div className="md:col-span-2 rounded-xl border bg-white p-4 shadow-sm space-y-2">
+        <div className="md:col-span-2 rounded-xl border bg-white px-2 pt-1 pb-2 shadow-sm space-y-2">
           {/* NEW: Başlık + Progress */}
           <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-semibold">
-              Günün Soruları 
-            </h2>
+            <h2 className="text-xl font-semibold">Günün Soruları</h2>
 
             {hasGoal && (
               <div className="w-full sm:w-80">
-                <div className="text-s text-black mb-1 text-center">
-                  Günlük hedefim: <b>{dailyGoal}</b> soru
-                </div>
-              <div
-                className="relative h-6 w-full overflow-hidden rounded-full bg-gray-200 shadow-inner"
+                  <div
+                  className="relative h-6 mb-2 w-full overflow-hidden rounded-full bg-gray-200 shadow-inner"
                   role="progressbar"
                   aria-valuemin={0}
                   aria-valuemax={dailyGoal as number}
                   aria-valuenow={Math.min(todayTotal, dailyGoal as number)}
                   aria-label="Günlük soru hedefi ilerleme"
                 >
-                  {/* dolu bar */}
                   <div
                     className={`absolute left-0 top-0 h-full transition-all duration-500
                     ${goalDone ? 'bg-gradient-to-r from-emerald-500 to-green-600' : 'bg-gradient-to-r from-indigo-500 to-purple-600'}`}
                     style={{ width: `${progressPct}%` }}
                   />
-                  {/* yüzde / tebrik yazısı */}
                   <div className="absolute inset-0 grid place-items-center text-[14px] font-semibold text-black drop-shadow">
-                    {goalDone ? '🎉 Tebrikler! Hedefini Tamamladın' : `Tamamlanan: ${progressPct}%`}
+                    {goalDone ? '🎉 Tebrikler! Hedefini Tamamladın' : `Günlük Hedef: ${dailyGoal} Soru, Tamamlanan: % ${progressPct}`}
                   </div>
                 </div>
               </div>
@@ -330,11 +309,9 @@ const totalData = useMemo(() => (
 
           <ul className="grid gap-2">
             {todayRecs.map((r) => (
-              <li key={r.id} className="rounded-lg border p-3">
+              <li key={r.id} className="rounded-lg border p-1">
                 <div className="flex justify-between items-center">
-                  {/* Ders adı sola */}
-                 <span className="font-medium">{r.subjects?.name ?? 'Ders'}</span>
-                  {/* Soru sayısı sağa */}
+                  <span className="font-medium">{r.subjects?.name ?? 'Ders'}</span>
                   <span className="font-bold">{r.question_count ?? 0} soru</span>
                 </div>
                 {r.note && <div className="text-sm text-gray-600 mt-1">{r.note}</div>}
@@ -342,7 +319,7 @@ const totalData = useMemo(() => (
             ))}
 
             {todayRecs.length > 0 && (
-              <li className="rounded-lg border p-3 bg-teal-300">
+              <li className="rounded-lg border p-1 bg-teal-300">
                 <div className="flex justify-between items-center font-semibold">
                   <span>TOPLAM</span>
                   <span>{todayTotal} soru</span>
@@ -353,16 +330,12 @@ const totalData = useMemo(() => (
             {todayRecs.length === 0 && (
               <p className="text-sm text-gray-500">Bugün kayıt yok.</p>
             )}
-        </ul>
-
-          {/*<div className="text-right text-base text-gray-700">
-            <b>TOPLAM: {todayTotal}</b>
-          </div>*/}
+          </ul>
         </div>
 
         {/* Sağ: Günlük pasta grafiği */}
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h3 className="font-semibold mb-2">Günlük Dağılım</h3>
+          <h3 className="text-xl sm:text-xl font-semibold mb-2">Günlük Dağılım</h3>
           <div className="h-64 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart margin={{ top: 0, bottom: 0 }}>
@@ -372,10 +345,9 @@ const totalData = useMemo(() => (
                   nameKey="name"
                   outerRadius="90%"
                   cy="58%"
-                  label={renderPieLabel}   // ← kalıcı etiketler
+                  label={renderPieLabel}
                   labelLine={false}
                   minAngle={5}
-                  
                 >
                   {pieData.map((d, i) => (
                     <Cell key={d.name} fill={nameToColor[d.name] || COLORS[i % COLORS.length]} />
@@ -385,7 +357,6 @@ const totalData = useMemo(() => (
                 <Legend verticalAlign="bottom" align="center" wrapperStyle={{ marginBottom: -30 }} formatter={(value: string) => SHORT_LABEL[value] ?? value} />
               </PieChart>
             </ResponsiveContainer>
-
           </div>
         </div>
       </section>
@@ -449,32 +420,29 @@ const totalData = useMemo(() => (
           const q = getTodayQuote();
           return (
             <div className="space-y-1">
-              {/* metin: merkezde, italik */}
               <p className="text-center italic text-gray-800">“{q.text}”</p>
-              {/* yazar: sağa hizalı */}
               <p className="text-right text-sm text-gray-600"><b>{q.author}</b></p>
             </div>
           );
         })()}
       </section>
-
     </main>
   );
 }
 
 /* ================================================================== */
-/*           AKTİF KİTAPLAR – üstte liste + “Bugün okuduğum” girişi    */
+/*           AKTİF KİTAPLAR – tek kart + “Bugün okuduğum” girişi       */
 /* ================================================================== */
 function ActiveBooksInline() {
   const [rows, setRows] = useState<Book[]>([]);
   const [sumByTitle, setSumByTitle] = useState<Record<string, number>>({});
   const [lastPageByTitle, setLastPageByTitle] = useState<Record<string, number>>({});
-  const [todayByTitle, setTodayByTitle] = useState<Record<string, number>>({}); // ← eklendi
+  const [todayByTitle, setTodayByTitle] = useState<Record<string, number>>({});
   const [currentVals, setCurrentVals] = useState<Record<string, string>>({});
   const [saveBusy, setSaveBusy] = useState<string | null>(null);
   const [uid, setUid] = useState<string | undefined>();
 
-  function startOfToday() { const d = new Date(); d.setHours(0,0,0,0); return d; }
+  function startOfTodayLocal() { const d = new Date(); d.setHours(0,0,0,0); return d; }
 
   useEffect(() => {
     (async () => {
@@ -483,7 +451,7 @@ function ActiveBooksInline() {
       setUid(currentUid);
       if (!currentUid) return;
 
-      // Aktif kitaplar
+      // Kitaplar
       const { data: books } = await supabase
         .from('books')
         .select('id,title,author,total_pages,cover_url,is_finished,status,created_at,updated_at')
@@ -503,7 +471,7 @@ function ActiveBooksInline() {
       const lastMap: Record<string, number> = {};
       const todayMap: Record<string, number> = {};
 
-      const today0 = startOfToday().getTime();
+      const today0 = startOfTodayLocal().getTime();
 
       (logs ?? []).forEach((x: any) => {
         const t = (x.title || '').trim();
@@ -555,7 +523,6 @@ function ActiveBooksInline() {
       });
       if (error) throw error;
 
-      // UI
       setSumByTitle((s) => ({ ...s, [b.title]: (s[b.title] || 0) + delta }));
       setLastPageByTitle((s) => ({ ...s, [b.title]: current }));
       setTodayByTitle((s) => ({ ...s, [b.title]: (s[b.title] || 0) + delta }));
@@ -571,79 +538,98 @@ function ActiveBooksInline() {
     return <p className="text-sm text-gray-500">Aktif kitap yok.</p>;
   }
 
+  // İlk aktif kitapla tek kart
+  const b = rows[0];
+  const read = sumByTitle[b.title] || 0;
+  const total = b.total_pages || 0;
+  const remain = total ? Math.max(total - read, 0) : null;
+  const pct = total ? Math.min(100, Math.round((read / total) * 100)) : null;
+  const lastPage = lastPageByTitle[b.title];
+  const today = todayByTitle[b.title] || 0;
+  const inputId2 = `curr-${b.id}`;
+
   return (
-    <ul className="space-y-3">
-      {rows.map((b) => {
-        const read = sumByTitle[b.title] || 0;
-        const total = b.total_pages || 0;
-        const remain = total ? Math.max(total - read, 0) : null;
-        const pct = total ? Math.min(100, Math.round((read / total) * 100)) : null;
-        const inputId2 = `curr-${b.id}`;
-        const lastPage = lastPageByTitle[b.title];
-        const today = todayByTitle[b.title] || 0;
+    <div className="rounded-xl bg-white">
+      <div className="flex items-start gap-3">
+        {/* Kapak – mobilde daha geniş görünüm */}
+        <div className="h-[130px] w-[110px] overflow-hidden rounded border bg-gray-100 shrink-0">
+          {b.cover_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={b.cover_url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="grid h-full w-full place-items-center text-xl">📘</div>
+          )}
+        </div>
 
-        return (
-          <li key={b.id} className="rounded-lg border p-3">
-            <div className="flex items-center justify-between gap-4">
-              {/* Kapak */}
-              <div className="h-16 w-12 overflow-hidden rounded bg-gray-100 border shrink-0">
-                {b.cover_url ? (
-                  <img src={b.cover_url} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="h-full w-full grid place-items-center text-xl">📘</div>
-                )}
-              </div>
+        {/* Bilgiler */}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{b.title}</div>
+          <div className="truncate text-xs text-gray-600">{b.author ?? '-'}</div>
 
-              {/* Başlık + ilerleme */}
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">
-                  {b.title}{b.author ? <span className="text-gray-500"> — {b.author}</span> : null}
-                </div>
-                <div className="text-xs mb-1 mt-1 flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                  <span>
-                    {total
-                      ? <>Okunan: <b>{read}</b> · Kalan: <b>{remain}</b> · Biten: <b>%{pct}</b></>
-                      : <>Okunan: <b>{read}</b></>}
-                  </span>
-                  {lastPage != null && <span>Kaldığım Sayfa: <b>{lastPage}</b></span>}
-                  <span className="text-emerald-700">Bugün Okuduğum: <b>{today}</b></span>
-                </div>
-                <div className="relative h-2 w-full rounded-full bg-gray-200">
-                  <div
-                    className="absolute left-0 top-0 h-2 rounded-full bg-indigo-500"
-                    style={{ width: pct ? `${pct}%` : (read > 0 ? '8%' : '0%') }}
-                  />
-                </div>
-              </div>
-
-              {/* Sağ: Kaldığım sayfa giriş */}
-              <div className="flex flex-col items-start gap-2 shrink-0">
-                <label htmlFor={inputId2} className="text-sm font-medium text-gray-700">
-                  Kaldığım sayfa:
-                </label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    id={inputId2}
-                    type="number"
-                    min={0}
-                    placeholder={lastPage != null ? `Örn. ${lastPage + 5}` : 'Sayfa'}
-                    className="w-28 rounded border p-1 text-sm"
-                    value={currentVals[b.id] ?? ''}
-                    onChange={(e) => setCurrentVals((s) => ({ ...s, [b.id]: e.target.value }))}
-                  />
-                  <button
-                    onClick={() => setCurrentPage(b)}
-                    disabled={saveBusy === b.id}
-                    className="rounded bg-green-600 text-white px-3 py-1 text-sm hover:bg-green-700"
-                  >
-                    {saveBusy === b.id ? 'Kaydediliyor…' : 'Kaydet'}
-                  </button>
-                </div>
-              </div>
+          <div className="mt-1 grid gap-1 text-xs">
+            <div className="text-emerald-700 text-sm font-semibold">
+              Bugün Okunan: <b>{today}</b> Sayfa
             </div>
-          </li>
-        );
-      })}
-    </ul>
+            <div>
+              Toplam Okunan: <b>{read}</b>{total ? <> · Kalan: <b>{remain}</b></> : null}
+            </div>
+
+            </div>
+
+          {/* Progress Bar — daha yüksek, iç yazılı, zemin beyaz, ilerleme turuncu */}
+          <div
+            className="mt-1 relative w-full overflow-hidden rounded-full border bg-white h-5 sm:h-6"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={total || 0}
+            aria-valuenow={read}
+            aria-label="Kitap ilerleme yüzdesi"
+          >
+            {/* dolu kısım */}
+            <div
+              className="absolute left-0 top-0 h-full rounded-none bg-orange-500 transition-all duration-500"
+              style={{ width: pct ? `${pct}%` : (read > 0 ? '4px' : '0px') }}
+            />
+            {/* yüzde metni */}
+            <div className="absolute inset-0 grid place-items-center text-[12px] sm:text-[13px] font-semibold">
+              {total ? <>İlerleme: %{pct}</> : 'Toplam sayfa yok'}
+            </div>
+          </div>
+
+          {/* Kaldığım sayfayı ekle */}
+          <div className="mt-1 flex items-center justify-between gap-2">
+            {/* Sağ taraf: açıklama */}
+  <span className="text-xs text-gray-900">
+    Kaldığım Sayfa:
+  </span>
+            {/* Sol taraf: input + buton */}
+  <div className="flex items-center gap-2">
+    <label htmlFor={inputId2} className="sr-only">Kaldığım sayfa</label>
+    <input
+      id={inputId2}
+      type="number"
+      inputMode="numeric"
+      placeholder={lastPage != null ? String(lastPage) : 'Örn. 185'}
+      className="w-12 h-7 rounded border px-2 text-sm"
+      value={currentVals[b.id] ?? ''}
+      onChange={(e) => setCurrentVals((s) => ({ ...s, [b.id]: e.target.value }))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') setCurrentPage(b);
+      }}
+    />
+    <button
+      onClick={() => setCurrentPage(b)}
+      disabled={saveBusy === b.id}
+      className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
+    >
+      {saveBusy === b.id ? 'Kaydediliyor…' : 'Kaydet'}
+    </button>
+  </div>
+
+
+</div>
+          </div>
+        </div>
+      </div>
   );
 }

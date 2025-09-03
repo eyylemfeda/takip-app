@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Takip Paneli</string>
+    <string name="title_activity_main">Takip Paneli</string>
+    <string name="package_name">com.hakan.takip</string>
+    <string name="custom_url_scheme">com.hakan.takip</string>
+</resources>
