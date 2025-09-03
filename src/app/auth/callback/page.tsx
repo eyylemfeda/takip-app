@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-export default function AuthCallback() {
+// Bu sayfa SSG denemesin, her seferinde dinamik çalışsın:
+export const dynamic = 'force-dynamic';
+
+function CallbackInner() {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -27,5 +30,15 @@ export default function AuthCallback() {
     })();
   }, [params, router]);
 
-  return <p className="p-4 text-center text-sm text-gray-600">Doğrulama tamamlanıyor…</p>;
+  return (
+    <p className="p-4 text-center text-sm text-gray-600">Doğrulama tamamlanıyor…</p>
+  );
+}
+
+export default function AuthCallback() {
+  return (
+    <Suspense fallback={<p className="p-4 text-center text-sm text-gray-600">Yükleniyor…</p>}>
+      <CallbackInner />
+    </Suspense>
+  );
 }
