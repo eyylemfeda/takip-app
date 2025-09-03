@@ -4,7 +4,7 @@ import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-// Bu sayfa SSG denemesin, her seferinde dinamik çalışsın:
+// statik üretime zorlamasın:
 export const dynamic = 'force-dynamic';
 
 function CallbackInner() {
@@ -22,17 +22,11 @@ function CallbackInner() {
       }
 
       const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        router.replace(`/auth/error?msg=${encodeURIComponent(error.message)}`);
-      } else {
-        router.replace(next);
-      }
+      router.replace(error ? `/auth/error?msg=${encodeURIComponent(error.message)}` : next);
     })();
   }, [params, router]);
 
-  return (
-    <p className="p-4 text-center text-sm text-gray-600">Doğrulama tamamlanıyor…</p>
-  );
+  return <p className="p-4 text-center text-sm text-gray-600">Doğrulama tamamlanıyor…</p>;
 }
 
 export default function AuthCallback() {
