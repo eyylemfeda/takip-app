@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+export const dynamic = 'force-dynamic';
+
 const USERNAME_RE = /^[a-z0-9_.-]{3,20}$/i;
 
-export default function LoginPage() {
+function LoginInner() {
   const supabase = createClient();
   const router = useRouter();
   const params = useSearchParams();
@@ -209,5 +211,13 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-center text-sm text-gray-600">Yükleniyor…</div>}>
+      <LoginInner />
+    </Suspense>
   );
 }
