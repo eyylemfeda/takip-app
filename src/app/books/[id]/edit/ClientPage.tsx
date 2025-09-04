@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from '@/lib/supabase/client';
 import BookForm, { BookFormValues } from "@/components/BookForm";
+
+const supabase = createClient();
 
 // İstersen bu tipi '@/types' içinden import edebilirsin.
 // Burada dosya içi tip olarak bırakıyorum.

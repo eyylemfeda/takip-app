@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 import BookForm, { BookFormValues } from '@/components/BookForm';
+
+const supabase = createClient();
 
 export default function BookCreatePage() {
   const router = useRouter();

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
+
+const supabase = createClient();
 
 type Subject = { id: string; name: string };
 type Source  = { id: string; name: string; subject_id: string; user_id: string };

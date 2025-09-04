@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 import type { Subject, Source } from '@/types';
 import type { Topic, Profile } from '@/types';
+
+const supabase = createClient();
 
 export default function AdminTopicsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
