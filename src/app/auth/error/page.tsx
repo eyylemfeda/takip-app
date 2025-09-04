@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 export const dynamic = 'force-dynamic';
 
-export default function AuthError() {
+function AuthErrorInner() {
   const router = useRouter();
   const params = useSearchParams();
   const supabase = createClient();
@@ -15,13 +15,11 @@ export default function AuthError() {
   const msg = params.get('msg') ?? 'Doğrulama başarısız.';
   const nextUrl = params.get('next') || '/';
 
-  // Eğer oturum zaten kurulmuşsa (örn. link ikinci kez açıldı), otomatik yönlendir
+  // Oturum zaten varsa hata sayfasında bekletme, next'e al
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        router.replace(nextUrl);
-      }
+      if (data.session) router.replace(nextUrl);
     })();
   }, [supabase, router, nextUrl]);
 
@@ -30,7 +28,6 @@ export default function AuthError() {
       <div className="rounded-2xl border bg-white p-6 shadow text-center">
         <h1 className="mb-2 text-2xl font-semibold">Doğrulama Başarısız</h1>
         <p className="mb-6 text-red-600 break-words">{msg}</p>
-
         <div className="flex items-center justify-center gap-3">
           <Link
             href={`/login?next=${encodeURIComponent(nextUrl)}`}
@@ -47,5 +44,13 @@ export default function AuthError() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function AuthError() {
+  return (
+    <Suspense fallback={<div className="p-4 text-center text-sm text-gray-600">Yükleniyor…</div>}>
+      <AuthErrorInner />
+    </Suspense>
   );
 }
