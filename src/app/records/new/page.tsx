@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 
 /* ========= Tipler ========= */
 type Subject = { id: string; name: string };
@@ -24,6 +24,7 @@ function formatDMYFromISO(iso: string) {
 }
 
 export default function NewRecordPage() {
+  const supabase = createClient();
   const [uid, setUid] = useState<string | null>(null);
 
   // form alanları

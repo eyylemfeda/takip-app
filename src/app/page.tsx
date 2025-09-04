@@ -1,15 +1,13 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import type { Rec } from '@/types';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList
 } from 'recharts';
-// en üst importlara ekle
 import { QUOTES } from '@/data/quotes';
+import { createClient } from '@/lib/supabase/client';
 
 const RAD = Math.PI / 180;
 function renderPieLabel({
@@ -97,6 +95,8 @@ const SHORT_LABEL: Record<string, string> = {
 /*                           ANA SAYFA COMPONENT                       */
 /* ================================================================== */
 export default function Home() {
+  const supabase = createClient();
+
   const [uid, setUid] = useState<string>();
   const [todayRecs, setTodayRecs] = useState<Rec[]>([]);
   const [allRecs, setAllRecs] = useState<Rec[]>([]);
@@ -115,7 +115,6 @@ export default function Home() {
       setUid(id);
       if (!id) return;
 
-      const today0Iso = startOfToday().toISOString();
       const m0 = startOfMonth();
       const y0 = startOfYear();
 
@@ -151,31 +150,38 @@ export default function Home() {
         setDailyGoal(p?.daily_goal ?? null);
       }
 
-      // Bugün (records)
       // 🔸 Günün (01:00–01:00) tarihi
-        const dayKey = dayKey01();
+      const dayKey = dayKey01();
 
-        // Bugün (records) — sadece takvimli kayıtlar, activity_date == dayKey
-        supabase.from('records')
+      // Bugün (records) — sadece takvimli kayıtlar, activity_date == dayKey
+      {
+        const { data: todayData, error: todayErr } = await supabase
+          .from('records')
           .select('id,created_at,subjects(name),question_count,duration_min,note,activity_date,off_calendar')
           .eq('user_id', id)
           .not('question_count', 'is', null)
           .eq('off_calendar', false)
           .eq('activity_date', dayKey)     // ← 01:00 gün anahtarı
-          .order('created_at', { ascending: false })
-          .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>()
-          .then(({ data }) => setTodayRecs((data ?? []) as any));
+          .order('created_at', { ascending: false });
 
+        if (!todayErr) setTodayRecs((todayData ?? []) as any);
+        else console.error('todayErr', todayErr);
+      }
 
       // Tüm records (grafikler)
-      supabase.from('records')
-        .select('id,created_at,subjects(name),question_count,activity_date,off_calendar')
-        .eq('user_id', id)
-        .not('question_count', 'is', null)
-        .order('created_at', { ascending: false })
-        .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>()
-        .then(({ data }) => setAllRecs((data ?? []) as any));
+      {
+        const { data: allData, error: allErr } = await supabase
+          .from('records')
+          .select('id,created_at,subjects(name),question_count,activity_date,off_calendar')
+          .eq('user_id', id)
+          .not('question_count', 'is', null)
+          .order('created_at', { ascending: false });
+
+        if (!allErr) setAllRecs((allData ?? []) as any);
+        else console.error('allErr', allErr);
+      }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ---------- Grafik verileri ---------- */
@@ -197,15 +203,13 @@ export default function Home() {
       agg.total[name] = (agg.total[name] || 0) + q;
       if (r.off_calendar) continue;
       if (t >= week0)  agg.week[name]  = (agg.week[name]  || 0) + q;
-      if (r.activity_date === dayKey) {
-      agg.today[name] = (agg.today[name] || 0) + q;
-    }
+      if (r.activity_date === dayKey) agg.today[name] = (agg.today[name] || 0) + q;
     }
     const names = Array.from(new Set([
       ...Object.keys(agg.total), ...Object.keys(agg.week), ...Object.keys(agg.today),
     ])).sort((a,b)=>(agg.total[b]||0)-(agg.total[a]||0));
     return { agg, names };
-  }, [allRecs, today0, week0]);
+  }, [allRecs, today0, week0, dayKey]);
 
   const weeklyTotal = Object.values(bySubject.agg.week).reduce((sum, val) => sum + val, 0);
   const overallTotal = Object.values(bySubject.agg.total).reduce((sum, val) => sum + val, 0);
@@ -285,8 +289,8 @@ export default function Home() {
             <h2 className="text-xl font-semibold">Günün Soruları</h2>
 
             {hasGoal && (
-              <div className="w-full sm:w-80">
-                  <div
+              <div className="w-full sm:w-80 md:mt-2">
+                <div
                   className="relative h-6 mb-2 w-full overflow-hidden rounded-full bg-gray-200 shadow-inner"
                   role="progressbar"
                   aria-valuemin={0}
@@ -434,6 +438,8 @@ export default function Home() {
 /*           AKTİF KİTAPLAR – tek kart + “Bugün okuduğum” girişi       */
 /* ================================================================== */
 function ActiveBooksInline() {
+  const supabase = createClient();
+
   const [rows, setRows] = useState<Book[]>([]);
   const [sumByTitle, setSumByTitle] = useState<Record<string, number>>({});
   const [lastPageByTitle, setLastPageByTitle] = useState<Record<string, number>>({});
@@ -495,7 +501,7 @@ function ActiveBooksInline() {
       setLastPageByTitle(lastMap);
       setTodayByTitle(todayMap);
     })();
-  }, []);
+  }, [supabase]);
 
   // Kaldığım sayfa kaydet
   async function setCurrentPage(b: Book) {
@@ -573,8 +579,7 @@ function ActiveBooksInline() {
             <div>
               Toplam Okunan: <b>{read}</b>{total ? <> · Kalan: <b>{remain}</b></> : null}
             </div>
-
-            </div>
+          </div>
 
           {/* Progress Bar — daha yüksek, iç yazılı, zemin beyaz, ilerleme turuncu */}
           <div
@@ -591,45 +596,37 @@ function ActiveBooksInline() {
               style={{ width: pct ? `${pct}%` : (read > 0 ? '4px' : '0px') }}
             />
             {/* yüzde metni */}
-            <div className="absolute inset-0 grid place-items-center text-[12px] sm:text-[13px] font-semibold">
+            <div className="absolute inset-0 grid place-items-center text-[12px] sm:text[13px] font-semibold">
               {total ? <>İlerleme: %{pct}</> : 'Toplam sayfa yok'}
             </div>
           </div>
 
           {/* Kaldığım sayfayı ekle */}
           <div className="mt-1 flex items-center justify-between gap-2">
-            {/* Sağ taraf: açıklama */}
-  <span className="text-xs text-gray-900">
-    Kaldığım Sayfa:
-  </span>
-            {/* Sol taraf: input + buton */}
-  <div className="flex items-center gap-2">
-    <label htmlFor={inputId2} className="sr-only">Kaldığım sayfa</label>
-    <input
-      id={inputId2}
-      type="number"
-      inputMode="numeric"
-      placeholder={lastPage != null ? String(lastPage) : 'Örn. 185'}
-      className="w-12 h-7 rounded border px-2 text-sm"
-      value={currentVals[b.id] ?? ''}
-      onChange={(e) => setCurrentVals((s) => ({ ...s, [b.id]: e.target.value }))}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') setCurrentPage(b);
-      }}
-    />
-    <button
-      onClick={() => setCurrentPage(b)}
-      disabled={saveBusy === b.id}
-      className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
-    >
-      {saveBusy === b.id ? 'Kaydediliyor…' : 'Kaydet'}
-    </button>
-  </div>
-
-
-</div>
+            <span className="text-xs text-gray-900">Kaldığım Sayfa:</span>
+            <div className="flex items-center gap-2">
+              <label htmlFor={inputId2} className="sr-only">Kaldığım sayfa</label>
+              <input
+                id={inputId2}
+                type="number"
+                inputMode="numeric"
+                placeholder={lastPage != null ? String(lastPage) : 'Örn. 185'}
+                className="w-12 h-7 rounded border px-2 text-sm"
+                value={currentVals[b.id] ?? ''}
+                onChange={(e) => setCurrentVals((s) => ({ ...s, [b.id]: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') setCurrentPage(b); }}
+              />
+              <button
+                onClick={() => setCurrentPage(b)}
+                disabled={saveBusy === b.id}
+                className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
+              >
+                {saveBusy === b.id ? 'Kaydediliyor…' : 'Kaydet'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
+    </div>
   );
 }

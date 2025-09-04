@@ -1,16 +1,32 @@
 'use client';
+
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient';
-import type { Profile } from '@/types';
+import { createClient } from '@/lib/supabase/client';
+
+/** DB satırı için referans tip (okuma amaçlı) */
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  daily_goal: number | null;
+  is_admin: boolean | null;
+};
+
+/** Formda tutulacak alanlar */
+type ProfileForm = {
+  full_name: string;
+  avatar_url: string;
+};
 
 export default function ProfilePage() {
-  const [uid, setUid] = useState<string>();
+  const supabase = createClient();
+
+  const [uid, setUid] = useState<string>('');
   const [email, setEmail] = useState<string>('');
-  const [form, setForm] = useState<Profile>({ full_name: '', avatar_url: '' });
-  const [msg, setMsg] = useState<string>();
+  const [form, setForm] = useState<ProfileForm>({ full_name: '', avatar_url: '' });
+  const [msg, setMsg] = useState<string>('');
   const [busy, setBusy] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
   const [goalInput, setGoalInput] = useState<string>('');
@@ -21,12 +37,14 @@ export default function ProfilePage() {
       const { data } = await supabase.auth.getSession();
       const u = data.session?.user;
       if (!u?.id) return;
+
       setUid(u.id);
       setEmail(u.email ?? '');
 
-      // profil yoksa oluştur
+      // profil satırı yoksa oluştur (idempotent)
       await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id' });
 
+      // profil verisini çek
       const { data: p } = await supabase
         .from('profiles')
         .select('full_name, avatar_url, daily_goal')
@@ -34,192 +52,118 @@ export default function ProfilePage() {
         .maybeSingle();
 
       if (p) {
-        setForm(p as Profile);
+        setForm({
+          full_name: p.full_name ?? '',
+          avatar_url: p.avatar_url ?? '',
+        });
         setDailyGoal(p.daily_goal ?? null);
-        setGoalInput(p.daily_goal?.toString() ?? '');
+        setGoalInput(p.daily_goal != null ? String(p.daily_goal) : '');
       }
     })();
-  }, []);
+  }, [supabase]);
 
-  async function saveName(e: React.FormEvent) {
+  async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
     if (!uid) return;
-    setBusy(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ full_name: form.full_name || null, updated_at: new Date().toISOString() })
-      .eq('id', uid);
-    setBusy(false);
-    setMsg(error ? 'Kaydedilemedi: ' + error.message : 'Kaydedildi ✅');
-  }
 
-  async function uploadAvatar(file: File) {
-    if (!uid) return;
     setBusy(true);
+    setMsg('');
     try {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `${uid}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from('avatars')
-        .upload(path, file, { cacheControl: '3600', upsert: true });
-      if (upErr) throw upErr;
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-      const publicUrl = urlData.publicUrl;
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-        .eq('id', uid);
+      const updates = {
+        full_name: form.full_name.trim(),
+        avatar_url: form.avatar_url.trim() || null,
+      };
+      const { error } = await supabase.from('profiles').update(updates).eq('id', uid);
       if (error) throw error;
-
-      setForm((f) => ({ ...f, avatar_url: publicUrl }));
-      setMsg('Avatar güncellendi ✅');
-    } catch (e: any) {
-      setMsg('Yükleme hatası: ' + (e?.message || e));
+      setMsg('Profil güncellendi.');
+    } catch (err: any) {
+      setMsg(err?.message ?? 'Profil kaydedilemedi.');
     } finally {
       setBusy(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
   }
 
-  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-      setMsg('Dosya çok büyük (max 3MB).');
-      e.currentTarget.value = '';
-      return;
-    }
-    uploadAvatar(file);
-  }
-
-  async function clearAvatar() {
+  async function saveDailyGoal() {
     if (!uid) return;
     setBusy(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ avatar_url: null, updated_at: new Date().toISOString() })
-      .eq('id', uid);
-    setBusy(false);
-    if (error) setMsg('Avatar kaldırılamadı: ' + error.message);
-    else {
-      setForm((f) => ({ ...f, avatar_url: null }));
-      setMsg('Avatar kaldırıldı.');
+    setMsg('');
+    try {
+      const raw = goalInput.trim();
+      const nextVal = raw === '' ? null : Number(raw);
+      if (raw !== '' && Number.isNaN(nextVal)) throw new Error('Geçerli bir sayı girin.');
+      const { error } = await supabase.from('profiles').update({ daily_goal: nextVal }).eq('id', uid);
+      if (error) throw error;
+      setDailyGoal(nextVal);
+      setMsg('Günlük hedef güncellendi.');
+    } catch (err: any) {
+      setMsg(err?.message ?? 'Hedef kaydedilemedi.');
+    } finally {
+      setBusy(false);
     }
-  }
-
-  async function saveGoal() {
-    if (!uid) return;
-    const parsed = parseInt(goalInput);
-    if (isNaN(parsed) || parsed <= 0) {
-      setMsg('Geçerli bir sayı girin.');
-      return;
-    }
-
-    setBusy(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ daily_goal: parsed, updated_at: new Date().toISOString() })
-      .eq('id', uid);
-    setBusy(false);
-
-    if (error) {
-      setMsg('Hedef kaydedilemedi: ' + error.message);
-    } else {
-      setDailyGoal(parsed);
-      setMsg('Günlük hedef kaydedildi ✅');
-    }
-  }
-
-  if (!uid) {
-    return (
-      <main className="p-6 space-y-2">
-        <p>Bu sayfa için giriş gerekiyor.</p>
-        <Link className="text-blue-600 hover:underline" href="/login">
-          Giriş yap
-        </Link>
-      </main>
-    );
   }
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="mx-auto max-w-3xl p-4 space-y-6">
       <h1 className="text-2xl font-bold">Profil</h1>
+      {email && <p className="text-sm text-gray-500">E-posta: {email}</p>}
 
-      {/* Avatar kartı */}
-      <section className="rounded-xl border bg-white p-4 shadow-sm max-w-md space-y-3">
-        <div className="flex items-center gap-4">
-          <div className="relative w-20 h-20 overflow-hidden rounded-full border bg-gray-100">
-            {form.avatar_url ? (
-              <img src={form.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-            ) : (
-              <span className="absolute inset-0 grid place-items-center text-2xl">👤</span>
-            )}
-          </div>
-
-          <div className="space-x-2">
-            <label className="inline-block cursor-pointer rounded-lg border px-3 py-2 hover:bg-gray-50">
-              Resim Yükle
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
-            </label>
-            {form.avatar_url && (
-              <button onClick={clearAvatar} className="rounded-lg border px-3 py-2 hover:bg-gray-50">
-                Kaldır
-              </button>
-            )}
-          </div>
-        </div>
-        <p className="text-sm text-gray-600">Öneri: .jpg/.png, max 3MB.</p>
-      </section>
-
-      {/* Ad soyad kartı */}
-      <section className="rounded-xl border bg-white p-4 shadow-sm max-w-md space-y-4">
-        <div className="text-sm text-gray-600">
-          E-posta: <b>{email}</b>
+      <form onSubmit={saveProfile} className="rounded-xl border bg-white p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Ad Soyad</label>
+          <input
+            value={form.full_name}
+            onChange={(e) =>
+              setForm((f: ProfileForm) => ({ ...f, full_name: e.target.value }))
+            }
+            className="w-full rounded border px-3 py-2"
+            placeholder="Ad Soyad"
+          />
         </div>
 
-        <form onSubmit={saveName} className="space-y-3">
-          <div>
-            <label className="text-sm">Ad Soyad</label>
-            <input
-              className="w-full rounded-lg border p-2"
-              placeholder="Ad Soyad"
-              value={form.full_name ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
-            />
-          </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Avatar URL</label>
+          <input
+            value={form.avatar_url}
+            onChange={(e) =>
+              setForm((f: ProfileForm) => ({ ...f, avatar_url: e.target.value }))
+            }
+            className="w-full rounded border px-3 py-2"
+            placeholder="https://..."
+          />
+          <input ref={fileRef} type="file" className="hidden" />
+        </div>
 
-          <button
-            disabled={busy}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {busy ? 'Kaydediliyor…' : 'Kaydet'}
-          </button>
-        </form>
-      </section>
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
+        >
+          {busy ? 'Kaydediliyor…' : 'Profili Kaydet'}
+        </button>
+      </form>
 
-      {/* Günlük hedef kartı */}
-      <section className="rounded-xl border bg-white p-4 shadow-sm max-w-md space-y-3">
-        <label className="text-sm font-medium text-gray-700">Günlük Soru Hedefin</label>
+      <div className="rounded-xl border bg-white p-4 space-y-3">
+        <label className="block text-sm font-medium">Günlük Soru Hedefi</label>
         <div className="flex items-center gap-2">
           <input
-            type="number"
-            min={1}
-            className="w-32 rounded border p-2"
-            placeholder="Örn. 100"
             value={goalInput}
             onChange={(e) => setGoalInput(e.target.value)}
+            inputMode="numeric"
+            className="w-32 rounded border px-3 py-2"
+            placeholder="örn. 100"
           />
           <button
-            onClick={saveGoal}
+            onClick={saveDailyGoal}
             disabled={busy}
-            className="rounded-lg bg-indigo-600 px-3 py-2 text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="rounded bg-emerald-600 px-4 py-2 text-white disabled:opacity-60"
           >
-            {busy ? 'Kaydediliyor…' : 'Kaydet'}
+            {busy ? 'Kaydediliyor…' : 'Hedefi Kaydet'}
           </button>
+          {dailyGoal != null && (
+            <span className="text-sm text-gray-600">Mevcut: {dailyGoal}</span>
+          )}
         </div>
-      </section>
+      </div>
 
       {msg && <p className="text-sm text-emerald-700">{msg}</p>}
     </main>

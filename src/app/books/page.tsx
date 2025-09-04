@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 import { startOfToday } from 'date-fns';
 
 type BookRow = {
@@ -23,6 +23,7 @@ type SumMap = Record<string, number>;
 type LastPageMap = Record<string, number>;
 
 export default function BooksPage() {
+  const supabase = createClient();
   const [uid, setUid] = useState<string | null>(null);
   const [rows, setRows] = useState<BookRow[]>([]);
   const [msg, setMsg] = useState<string | undefined>();
