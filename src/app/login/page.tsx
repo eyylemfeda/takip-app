@@ -136,12 +136,12 @@ function LoginInner() {
         {/* Bilgi bantları */}
         {mode === 'login' && isVerified && (
           <p className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            E-posta adresin doğrulandı. Lütfen giriş yap.
+            E-posta adresin doğrulandı. <br />İlk giriş için lütfen e-posta adresini kullan.<br />Sonraki girişlerde e-posta adresi ya da kullanıcı adı kullanabilirsin.
           </p>
         )}
         {mode === 'login' && !isVerified && isVerify && (
           <p className="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            Kayıt tamamlandı. E-postandaki doğrulama bağlantısına tıkla, sonra giriş yap.
+            Kayıt tamamlandı. E-postana "Supabase"den gelen doğrulama bağlantısına tıkla. <br />İlk kez sisteme girerken e-posta adresin ve şifreni kullan.<br />Sonraki girişlerde e-posta ya da kullanıcı adını tercih edebilirsin.
           </p>
         )}
 
