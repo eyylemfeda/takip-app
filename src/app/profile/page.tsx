@@ -40,40 +40,46 @@ export default function ProfilePage() {
 
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  // --- Profili yükle ---
+  // --- Profili yükle (stabil akış, focus/refresh döngüsü yok) ---
   useEffect(() => {
-    let alive = true;
+    let cancelled = false;
 
-    (async () => {
+    async function load() {
+      setLoading(true);
+      setErr('');
+      setMsg('');
+
       try {
-        setLoading(true);
-        setErr('');
-        setMsg('');
-
-        // oturum
-        const { data: sess } = await supabase.auth.getSession();
-        const u = sess.session?.user;
+        // 1) Oturum
+        const { data: { session } } = await supabase.auth.getSession();
+        const u = session?.user;
         if (!u?.id) {
-          if (alive) setErr('Oturum bulunamadı.');
+          if (!cancelled) {
+            setErr('Oturum bulunamadı.');
+            setReady(false);
+          }
           return;
         }
-        if (!alive) return;
 
+        if (cancelled) return;
         setUid(u.id);
         setEmail(u.email ?? '');
 
-        // profil satırı yoksa oluştur (idempotent)
-        await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id' });
+        // 2) Profil satırı yoksa oluştur (idempotent)
+        const { error: upsertErr } = await supabase
+          .from('profiles')
+          .upsert({ id: u.id }, { onConflict: 'id' });
+        if (upsertErr) throw upsertErr;
 
-        // profil verisini çek
-        const { data: p, error } = await supabase
+        // 3) Profil verisini çek
+        const { data: p, error: selErr } = await supabase
           .from('profiles')
           .select('full_name, avatar_url, daily_goal')
           .eq('id', u.id)
           .maybeSingle();
+        if (selErr) throw selErr;
 
-        if (error) throw error;
-        if (!alive) return;
+        if (cancelled) return;
 
         setForm({
           full_name: p?.full_name ?? '',
@@ -81,30 +87,17 @@ export default function ProfilePage() {
         });
         setDailyGoal(p?.daily_goal ?? null);
         setGoalInput(p?.daily_goal != null ? String(p?.daily_goal) : '');
-
         setReady(true);
       } catch (e: any) {
-        if (alive) setErr(e?.message ?? 'Profil yüklenemedi.');
+        if (!cancelled) setErr(e?.message ?? 'Profil yüklenemedi.');
       } finally {
-        if (alive) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    })();
+    }
 
-    // sekmeye dönünce tazele (mobilde faydalı)
-    const onFocus = () => {
-      // yeniden çağır
-      setReady(false);
-      setLoading(true);
-      // yukarıdaki IIFE'yi tetiklemek için state değişimi yeterli değil; sayfayı refreshleyelim
-      router.refresh();
-    };
-    window.addEventListener('focus', onFocus);
-
-    return () => {
-      alive = false;
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [supabase, router]);
+    load();
+    return () => { cancelled = true; };
+  }, [supabase]);
 
   // --- Profil kaydet ---
   async function saveProfile(e: React.FormEvent) {
@@ -125,7 +118,8 @@ export default function ProfilePage() {
       if (error) throw error;
 
       setMsg('Profil güncellendi ✅');
-      window.dispatchEvent(new Event('profile:changed')); // HeaderBar yenilesin
+      // HeaderBar hemen güncellesin
+      window.dispatchEvent(new Event('profile:changed'));
       router.refresh();
     } catch (e: any) {
       setErr(e?.message ?? 'Profil kaydedilemedi.');
@@ -162,11 +156,13 @@ export default function ProfilePage() {
     }
   }
 
+  // --- Yükleniyor görünümü (hata varsa göster) ---
   if (loading) {
     return (
       <main className="mx-auto max-w-3xl p-4">
         <div className="rounded-xl border bg-white p-6 shadow">
           <p>Yükleniyor…</p>
+          {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
         </div>
       </main>
     );
