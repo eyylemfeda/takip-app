@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 /** DB satırı için referans tip (okuma amaçlı) */
@@ -20,7 +21,7 @@ type ProfileForm = {
 
 export default function ProfilePage() {
   const supabase = createClient();
-
+  const router = useRouter();
   const [uid, setUid] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [form, setForm] = useState<ProfileForm>({ full_name: '', avatar_url: '' });
@@ -75,7 +76,10 @@ export default function ProfilePage() {
       };
       const { error } = await supabase.from('profiles').update(updates).eq('id', uid);
       if (error) throw error;
-      setMsg('Profil güncellendi.');
+      setMsg('Profil güncellendi ✅');
+      window.dispatchEvent(new Event('profile:changed')); // HeaderBar dinleyecek
+      router.refresh();                                   // SSR kısımlar tazelensin
+
     } catch (err: any) {
       setMsg(err?.message ?? 'Profil kaydedilemedi.');
     } finally {
