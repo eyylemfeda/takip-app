@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-/** DB satırı için referans tip (okuma amaçlı) */
+/** DB satırı (okuma amaçlı) */
 type ProfileRow = {
   id: string;
   full_name: string | null;
@@ -13,7 +13,7 @@ type ProfileRow = {
   is_admin: boolean | null;
 };
 
-/** Formda tutulacak alanlar */
+/** Form state */
 type ProfileForm = {
   full_name: string;
   avatar_url: string;
@@ -22,88 +22,154 @@ type ProfileForm = {
 export default function ProfilePage() {
   const supabase = createClient();
   const router = useRouter();
+
   const [uid, setUid] = useState<string>('');
   const [email, setEmail] = useState<string>('');
-  const [form, setForm] = useState<ProfileForm>({ full_name: '', avatar_url: '' });
-  const [msg, setMsg] = useState<string>('');
-  const [busy, setBusy] = useState(false);
-  const fileRef = useRef<HTMLInputElement | null>(null);
 
+  const [form, setForm] = useState<ProfileForm>({ full_name: '', avatar_url: '' });
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
   const [goalInput, setGoalInput] = useState<string>('');
 
-  // oturum + profil yükleme
+  const [msg, setMsg] = useState<string>('');
+  const [err, setErr] = useState<string>('');
+
+  const [loading, setLoading] = useState(true);     // sayfa ilk yükleme
+  const [ready, setReady] = useState(false);        // uid/profil hazır mı
+  const [busyProfile, setBusyProfile] = useState(false);
+  const [busyGoal, setBusyGoal] = useState(false);
+
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // --- Profili yükle ---
   useEffect(() => {
+    let alive = true;
+
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const u = data.session?.user;
-      if (!u?.id) return;
+      try {
+        setLoading(true);
+        setErr('');
+        setMsg('');
 
-      setUid(u.id);
-      setEmail(u.email ?? '');
+        // oturum
+        const { data: sess } = await supabase.auth.getSession();
+        const u = sess.session?.user;
+        if (!u?.id) {
+          if (alive) setErr('Oturum bulunamadı.');
+          return;
+        }
+        if (!alive) return;
 
-      // profil satırı yoksa oluştur (idempotent)
-      await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id' });
+        setUid(u.id);
+        setEmail(u.email ?? '');
 
-      // profil verisini çek
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('full_name, avatar_url, daily_goal')
-        .eq('id', u.id)
-        .maybeSingle();
+        // profil satırı yoksa oluştur (idempotent)
+        await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id' });
 
-      if (p) {
+        // profil verisini çek
+        const { data: p, error } = await supabase
+          .from('profiles')
+          .select('full_name, avatar_url, daily_goal')
+          .eq('id', u.id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!alive) return;
+
         setForm({
-          full_name: p.full_name ?? '',
-          avatar_url: p.avatar_url ?? '',
+          full_name: p?.full_name ?? '',
+          avatar_url: p?.avatar_url ?? '',
         });
-        setDailyGoal(p.daily_goal ?? null);
-        setGoalInput(p.daily_goal != null ? String(p.daily_goal) : '');
+        setDailyGoal(p?.daily_goal ?? null);
+        setGoalInput(p?.daily_goal != null ? String(p?.daily_goal) : '');
+
+        setReady(true);
+      } catch (e: any) {
+        if (alive) setErr(e?.message ?? 'Profil yüklenemedi.');
+      } finally {
+        if (alive) setLoading(false);
       }
     })();
-  }, [supabase]);
 
+    // sekmeye dönünce tazele (mobilde faydalı)
+    const onFocus = () => {
+      // yeniden çağır
+      setReady(false);
+      setLoading(true);
+      // yukarıdaki IIFE'yi tetiklemek için state değişimi yeterli değil; sayfayı refreshleyelim
+      router.refresh();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      alive = false;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [supabase, router]);
+
+  // --- Profil kaydet ---
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    if (!uid) return;
+    if (!uid || !ready || busyProfile) return;
 
-    setBusy(true);
+    setBusyProfile(true);
     setMsg('');
+    setErr('');
     try {
       const updates = {
+        id: uid,
         full_name: form.full_name.trim(),
         avatar_url: form.avatar_url.trim() || null,
       };
-      const { error } = await supabase.from('profiles').update(updates).eq('id', uid);
+      // upsert: gerekirse satırı oluştur
+      const { error } = await supabase.from('profiles').upsert(updates, { onConflict: 'id' });
       if (error) throw error;
-      setMsg('Profil güncellendi ✅');
-      window.dispatchEvent(new Event('profile:changed')); // HeaderBar dinleyecek
-      router.refresh();                                   // SSR kısımlar tazelensin
 
-    } catch (err: any) {
-      setMsg(err?.message ?? 'Profil kaydedilemedi.');
+      setMsg('Profil güncellendi ✅');
+      window.dispatchEvent(new Event('profile:changed')); // HeaderBar yenilesin
+      router.refresh();
+    } catch (e: any) {
+      setErr(e?.message ?? 'Profil kaydedilemedi.');
     } finally {
-      setBusy(false);
+      setBusyProfile(false);
     }
   }
 
-  async function saveDailyGoal() {
-    if (!uid) return;
-    setBusy(true);
+  // --- Günlük hedef kaydet ---
+  async function saveDailyGoal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!uid || !ready || busyGoal) return;
+
+    setBusyGoal(true);
     setMsg('');
+    setErr('');
     try {
       const raw = goalInput.trim();
       const nextVal = raw === '' ? null : Number(raw);
       if (raw !== '' && Number.isNaN(nextVal)) throw new Error('Geçerli bir sayı girin.');
-      const { error } = await supabase.from('profiles').update({ daily_goal: nextVal }).eq('id', uid);
+
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: uid, daily_goal: nextVal }, { onConflict: 'id' });
       if (error) throw error;
+
       setDailyGoal(nextVal);
-      setMsg('Günlük hedef güncellendi.');
-    } catch (err: any) {
-      setMsg(err?.message ?? 'Hedef kaydedilemedi.');
+      setMsg('Günlük hedef güncellendi ✅');
+      router.refresh();
+    } catch (e: any) {
+      setErr(e?.message ?? 'Hedef kaydedilemedi.');
     } finally {
-      setBusy(false);
+      setBusyGoal(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-3xl p-4">
+        <div className="rounded-xl border bg-white p-6 shadow">
+          <p>Yükleniyor…</p>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -111,16 +177,16 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-bold">Profil</h1>
       {email && <p className="text-sm text-gray-500">E-posta: {email}</p>}
 
+      {/* Profil formu */}
       <form onSubmit={saveProfile} className="rounded-xl border bg-white p-4 space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Ad Soyad</label>
           <input
             value={form.full_name}
-            onChange={(e) =>
-              setForm((f: ProfileForm) => ({ ...f, full_name: e.target.value }))
-            }
+            onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
             className="w-full rounded border px-3 py-2"
             placeholder="Ad Soyad"
+            disabled={!ready || busyProfile}
           />
         </div>
 
@@ -128,48 +194,52 @@ export default function ProfilePage() {
           <label className="block text-sm font-medium mb-1">Avatar URL</label>
           <input
             value={form.avatar_url}
-            onChange={(e) =>
-              setForm((f: ProfileForm) => ({ ...f, avatar_url: e.target.value }))
-            }
+            onChange={(e) => setForm((f) => ({ ...f, avatar_url: e.target.value }))}
             className="w-full rounded border px-3 py-2"
             placeholder="https://..."
+            disabled={!ready || busyProfile}
           />
           <input ref={fileRef} type="file" className="hidden" />
         </div>
 
         <button
           type="submit"
-          disabled={busy}
-          className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
+          disabled={!ready || busyProfile}
+          className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
         >
-          {busy ? 'Kaydediliyor…' : 'Profili Kaydet'}
+          {busyProfile ? 'Kaydediliyor…' : 'Profili Kaydet'}
         </button>
       </form>
 
-      <div className="rounded-xl border bg-white p-4 space-y-3">
+      {/* Günlük hedef formu */}
+      <form onSubmit={saveDailyGoal} className="rounded-xl border bg-white p-4 space-y-3">
         <label className="block text-sm font-medium">Günlük Soru Hedefi</label>
         <div className="flex items-center gap-2">
           <input
             value={goalInput}
             onChange={(e) => setGoalInput(e.target.value)}
             inputMode="numeric"
+            pattern="[0-9]*"
             className="w-32 rounded border px-3 py-2"
             placeholder="örn. 100"
+            disabled={!ready || busyGoal}
           />
           <button
-            onClick={saveDailyGoal}
-            disabled={busy}
-            className="rounded bg-emerald-600 px-4 py-2 text-white disabled:opacity-60"
+            type="submit"
+            disabled={!ready || busyGoal}
+            className="rounded bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-60"
           >
-            {busy ? 'Kaydediliyor…' : 'Hedefi Kaydet'}
+            {busyGoal ? 'Kaydediliyor…' : 'Hedefi Kaydet'}
           </button>
           {dailyGoal != null && (
             <span className="text-sm text-gray-600">Mevcut: {dailyGoal}</span>
           )}
         </div>
-      </div>
+      </form>
 
+      {/* Mesajlar */}
       {msg && <p className="text-sm text-emerald-700">{msg}</p>}
+      {err && <p className="text-sm text-red-600">{err}</p>}
     </main>
   );
 }
