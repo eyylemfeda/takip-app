@@ -22,27 +22,29 @@ function LoginInner() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // ----- GİRİŞ -----
+  const isVerify   = params.get('verify') === '1';    // "mailini kontrol et"
+  const isVerified = params.get('verified') === '1';  // "mail doğrulandı, giriş yap"
+
+  async function usernameToEmail(uname: string): Promise<string | null> {
+    const { data, error } = await supabase.rpc('get_email_by_username', {
+      p_username: uname,
+    });
+    if (error) throw error;
+    return (data as string) || null;
+  }
+
+  // ===== GİRİŞ =====
   async function doLogin(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     setLoading(true);
     try {
-      // kullanıcı adı mı, e-posta mı?
-      let emailToUse: string | null = null;
-
-      if (emailOrUser.includes('@')) {
-        emailToUse = emailOrUser.trim();
-      } else {
-        const { data, error } = await supabase.rpc('get_email_by_username', {
-          p_username: emailOrUser.trim(),
-        });
-        if (error) throw error;
-        emailToUse = (data as string) || null;
-      }
+      const ident = emailOrUser.trim();
+      const emailToUse = ident.includes('@') ? ident : await usernameToEmail(ident);
 
       if (!emailToUse) {
         setErr('Kullanıcı bulunamadı.');
+        setLoading(false);
         return;
       }
 
@@ -52,19 +54,26 @@ function LoginInner() {
       });
       if (signErr) {
         setErr(signErr.message);
+        setLoading(false);
         return;
       }
 
-      router.replace(nextUrl);
-      router.refresh();
+      // Oturumun yazılmasını bekle (max ~4sn), sonra TAM SAYFA yönlendirme
+      const deadline = Date.now() + 4000;
+      while (Date.now() < deadline) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) break;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      window.location.replace(nextUrl);
+      return;
     } catch (e: any) {
       setErr(e?.message ?? 'Giriş sırasında bir hata oluştu.');
-    } finally {
       setLoading(false);
     }
   }
 
-  // ----- KAYIT -----
+  // ===== KAYIT =====
   async function doSignup(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
@@ -73,27 +82,28 @@ function LoginInner() {
       const uname = username.trim();
       if (!USERNAME_RE.test(uname)) {
         setErr('Kullanıcı adı 3-20 karakter, harf/rakam/._- olmalı.');
+        setLoading(false);
         return;
       }
 
-      const origin = process.env.NEXT_PUBLIC_SITE_URL!; // ENV’den gelsin
+      const origin = process.env.NEXT_PUBLIC_SITE_URL!;
 
       const { error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           emailRedirectTo: `${origin}/auth/callback?next=/auth/success`,
-          data: { username: uname }, // username'i metadata’ya koyuyoruz
+          data: { username: uname },
         },
       });
       if (signUpError) throw signUpError;
 
-      // Aynı route’tayken bile UI’ı login moduna geçir
+      // Kayıt sonrası: login moduna geç, e-postayı inputa yaz, şifreyi temizle
       setMode('login');
       setEmailOrUser(email.trim());
       setPassword('');
 
-      // Login sayfasına yönlendir (next'i koru, uyarı bandı için verify=1)
+      // Bilgilendirme için verify=1 ile login'e yönlendir
       router.replace(`/login?next=${encodeURIComponent(nextUrl)}&verify=1`);
       router.refresh();
     } catch (e: any) {
@@ -115,10 +125,15 @@ function LoginInner() {
           {mode === 'login' ? 'Giriş Yap' : 'Kayıt Ol'}
         </h1>
 
-        {/* Kayıt sonrası bilgilendirme bandı */}
-        {params.get('verify') === '1' && mode === 'login' && (
-          <p className="mb-4 rounded border bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            Kayıt tamamlandı. Lütfen e-postandaki doğrulama bağlantısına tıkla, sonra giriş yap.
+        {/* Bilgi bantları */}
+        {mode === 'login' && isVerified && (
+          <p className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            E-posta adresin doğrulandı. Lütfen giriş yap.
+          </p>
+        )}
+        {mode === 'login' && !isVerified && isVerify && (
+          <p className="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            Kayıt tamamlandı. E-postandaki doğrulama bağlantısına tıkla, sonra giriş yap.
           </p>
         )}
 
