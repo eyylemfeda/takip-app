@@ -58,6 +58,14 @@ function LoginInner() {
         return;
       }
 
+    const { data: u } = await supabase.auth.getUser();
+    const uname = u.user?.user_metadata?.username as string | undefined;
+    if (u.user?.id && uname) {
+      await supabase
+        .from('profiles')
+        .upsert({ id: u.user.id, username: uname }, { onConflict: 'id' });
+    }
+
       // Oturumun yazılmasını bekle (max ~4sn), sonra TAM SAYFA yönlendirme
       const deadline = Date.now() + 4000;
       while (Date.now() < deadline) {
