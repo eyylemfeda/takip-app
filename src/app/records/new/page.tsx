@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
+import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 
 /* ========= Tipler ========= */
 type Subject = { id: string; name: string };
@@ -24,7 +25,8 @@ function formatDMYFromISO(iso: string) {
 }
 
 export default function NewRecordPage() {
-  const [uid, setUid] = useState<string | null>(null);
+  // → Ortak kanca: oturum/aktiflik koruması
+  const { uid, loading } = useRequireActiveUser();
 
   // form alanları
   const [subjectId, setSubjectId] = useState('');
@@ -49,20 +51,17 @@ export default function NewRecordPage() {
 
   const [msg, setMsg] = useState<string>();
 
-  /* ========= Oturum & Dersler ========= */
+  /* ========= Dersleri yükle (uid hazır olunca) ========= */
   useEffect(() => {
+    if (!uid) return;
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const id = data.session?.user?.id ?? null;
-      setUid(id);
-
       const { data: s1 } = await supabase
         .from('subjects')
         .select('id,name')
         .order('name');
       setSubjects((s1 ?? []) as Subject[]);
     })();
-  }, []);
+  }, [uid]);
 
   /* ========= Ders seçimine göre konular & kaynaklar ========= */
   useEffect(() => {
@@ -180,8 +179,19 @@ export default function NewRecordPage() {
     [subjects, subjectId]
   );
 
+  // Kanca kontrol aşamasında loader
+  if (loading) {
+    return (
+      <main className="px-2 py-5">
+        <p className="text-sm text-gray-600">Yükleniyor…</p>
+      </main>
+    );
+  }
+  // uid yoksa render etmiyoruz (kanca /login'e yönlendirir)
+  if (!uid) return null;
+
   return (
-    <main className="mx-auto max-w-none sm:max-w-3xl px-2 sm:px-4 md:px-6 py-3 sm:py-5 space-y-3 sm:space-y-4">
+    <main className="py-3 sm:py-5 space-y-3 sm:space-y-4">
       {/* Üst bar: başlık + sağda aksiyonlar */}
       <div className="mb-3 sm:mb-4 md:mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Çalışma Ekle</h1>
@@ -257,23 +267,22 @@ export default function NewRecordPage() {
             </select>
 
             <div className="grid grid-cols-[1fr_auto] gap-2">
-            <input
-              className="h-9 md:h-10 rounded-lg border px-2 py-1 text-sm leading-tight appearance-none"
-              placeholder={subjectId ? `${subjectName} için yeni kaynak…` : 'Önce Ders Seçiniz...'}
-              value={newSourceName}
-              onChange={(e) => setNewSourceName(e.target.value)}
-              disabled={!uid || !subjectId}
-            />
-            <button
-              type="button"
-              onClick={handleAddSource}
-              disabled={!uid || !subjectId || !newSourceName.trim() || addingSource}
-              className="inline-flex h-9 md:h-10 items-center justify-center rounded-lg bg-emerald-600 px-3 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-80"
-            >
-              {addingSource ? 'Ekleniyor…' : 'Ekle'}
-            </button>
-          </div>
-
+              <input
+                className="h-9 md:h-10 rounded-lg border px-2 py-1 text-sm leading-tight appearance-none"
+                placeholder={subjectId ? `${subjectName} için yeni kaynak…` : 'Önce Ders Seçiniz...'}
+                value={newSourceName}
+                onChange={(e) => setNewSourceName(e.target.value)}
+                disabled={!uid || !subjectId}
+              />
+              <button
+                type="button"
+                onClick={handleAddSource}
+                disabled={!uid || !subjectId || !newSourceName.trim() || addingSource}
+                className="inline-flex h-9 md:h-10 items-center justify-center rounded-lg bg-emerald-600 px-3 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-80"
+              >
+                {addingSource ? 'Ekleniyor…' : 'Ekle'}
+              </button>
+            </div>
           </div>
         </div>
 

@@ -1,46 +1,76 @@
 'use client';
+
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import type { Profile } from '@/types';
+import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
+import UsernameField from '@/app/components/UsernameField';
+
+// Formda düzenlediğimiz minimal alanlar:
+type ProfileForm = {
+  full_name: string | null;
+  avatar_url: string | null;
+};
 
 export default function ProfilePage() {
-  const [uid, setUid] = useState<string>();
+  // 1) Giriş + aktiflik kontrolü: oturum yoksa kanca login'e yönlendirir
+  const { uid, loading } = useRequireActiveUser();
+
+  // 2) Form ve yardımcı stateler
   const [email, setEmail] = useState<string>('');
-  const [form, setForm] = useState<Profile>({ full_name: '', avatar_url: '' });
+  const [form, setForm] = useState<ProfileForm>({ full_name: null, avatar_url: null });
+  const [dailyGoal, setDailyGoal] = useState<number | null>(null);
+  const [goalInput, setGoalInput] = useState<string>('');
   const [msg, setMsg] = useState<string>();
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [dailyGoal, setDailyGoal] = useState<number | null>(null);
-  const [goalInput, setGoalInput] = useState<string>('');
-
-  // oturum + profil yükleme
+  // 3) uid hazır olduğunda profil verilerini yükle (ve yoksa oluştur)
   useEffect(() => {
+    if (!uid) return;
+
+    let cancelled = false;
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const u = data.session?.user;
-      if (!u?.id) return;
-      setUid(u.id);
-      setEmail(u.email ?? '');
+      // kullanıcı e-postasını al
+      const { data } = await supabase.auth.getUser();
+      const u = data.user;
+      if (cancelled) return;
 
-      // profil yoksa oluştur
-      await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id' });
+      setEmail(u?.email ?? '');
 
+      // profil kaydı yoksa oluştur (idempotent)
+      await supabase.from('profiles').upsert({ id: uid }, { onConflict: 'id' });
+
+      // profili oku
       const { data: p } = await supabase
         .from('profiles')
         .select('full_name, avatar_url, daily_goal')
-        .eq('id', u.id)
+        .eq('id', uid)
         .maybeSingle();
 
+      if (cancelled) return;
+
       if (p) {
-        setForm(p as Profile);
-        setDailyGoal(p.daily_goal ?? null);
-        setGoalInput(p.daily_goal?.toString() ?? '');
+        setForm({
+          full_name: (p as any).full_name ?? null,
+          avatar_url: (p as any).avatar_url ?? null,
+        });
+        const dg = (p as any).daily_goal as number | null;
+        setDailyGoal(dg ?? null);
+        setGoalInput(dg ? String(dg) : '');
+      } else {
+        // p yoksa en azından state'leri temiz tutalım
+        setForm({ full_name: null, avatar_url: null });
+        setDailyGoal(null);
+        setGoalInput('');
       }
     })();
-  }, []);
 
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  // 4) Kaydet: ad-soyad
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
     if (!uid) return;
@@ -53,6 +83,7 @@ export default function ProfilePage() {
     setMsg(error ? 'Kaydedilemedi: ' + error.message : 'Kaydedildi ✅');
   }
 
+  // 5) Avatar yükleme
   async function uploadAvatar(file: File) {
     if (!uid) return;
     setBusy(true);
@@ -94,6 +125,7 @@ export default function ProfilePage() {
     uploadAvatar(file);
   }
 
+  // 6) Avatar temizle
   async function clearAvatar() {
     if (!uid) return;
     setBusy(true);
@@ -109,6 +141,7 @@ export default function ProfilePage() {
     }
   }
 
+  // 7) Günlük hedef kaydet
   async function saveGoal() {
     if (!uid) return;
     const parsed = parseInt(goalInput);
@@ -124,28 +157,31 @@ export default function ProfilePage() {
       .eq('id', uid);
     setBusy(false);
 
-    if (error) {
-      setMsg('Hedef kaydedilemedi: ' + error.message);
-    } else {
+    if (error) setMsg('Hedef kaydedilemedi: ' + error.message);
+    else {
       setDailyGoal(parsed);
       setMsg('Günlük hedef kaydedildi ✅');
     }
   }
 
-  if (!uid) {
+  // 8) Kanca kontrol aşamasında
+  if (loading) {
     return (
-      <main className="p-6 space-y-2">
-        <p>Bu sayfa için giriş gerekiyor.</p>
-        <Link className="text-blue-600 hover:underline" href="/login">
-          Giriş yap
-        </Link>
+      <main className="p-6">
+        <p className="text-sm text-gray-600">Yükleniyor…</p>
       </main>
     );
   }
+  // uid yoksa render etmeyiz (kanca zaten login'e yönlendirdi)
+  if (!uid) return null;
 
+  // 9) UI
   return (
     <main className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">Profil</h1>
+
+      {/* ➜ Kullanıcı adı alanı (yenisi) */}
+      <UsernameField />
 
       {/* Avatar kartı */}
       <section className="rounded-xl border bg-white p-4 shadow-sm max-w-md space-y-3">

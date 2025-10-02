@@ -8,8 +8,8 @@ import {
   PieChart, Pie, Cell, Tooltip as RTooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList
 } from 'recharts';
-// en üst importlara ekle
 import { QUOTES } from '@/data/quotes';
+import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 
 const RAD = Math.PI / 180;
 function renderPieLabel({
@@ -18,30 +18,20 @@ function renderPieLabel({
   const r = innerRadius + (outerRadius - innerRadius) * 0.55;
   const x = cx + r * Math.cos(-midAngle * RAD);
   const y = cy + r * Math.sin(-midAngle * RAD);
-
   return (
-    <text
-      x={x}
-      y={y}
-      fill="#fff"
-      textAnchor="middle"
-      dominantBaseline="middle"
-      fontSize={12}
-      fontWeight={600}
-    >
+    <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontSize={12} fontWeight={600}>
       {value}
     </text>
   );
 }
 
-// bugüne göre deterministik seçim (her gün farklı görünsün)
 function getTodayQuote() {
   const today = new Date();
   const index = (today.getFullYear() + today.getMonth() + today.getDate()) % QUOTES.length;
   return QUOTES[index];
 }
 
-/* ---------- Yardımcı zaman fonksiyonları ---------- */
+/* ---------- Zaman yardımcıları ---------- */
 function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 function startOfWeekMonday() {
   const d = new Date(); d.setHours(0, 0, 0, 0);
@@ -50,14 +40,11 @@ function startOfWeekMonday() {
 }
 function startOfYear() { const d = new Date(); d.setHours(0,0,0,0); d.setMonth(0,1); return d; }
 function startOfMonth() { const d = new Date(); d.setHours(0,0,0,0); d.setDate(1); return d; }
-// 01:00'da başlayan "gün" için YYYY-MM-DD anahtarı
-function dayKey01() {
+// Lokal takvim günü (00:00–23:59) → YYYY-MM-DD
+function todayLocalISODate(): string {
   const now = new Date();
-  const start = new Date(now);
-  start.setHours(1, 0, 0, 0);          // bugün 01:00
-  if (now < start) start.setDate(start.getDate() - 1); // 01:00'dan önceyse bir önceki gün
-  const isoLocal = new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString();
-  return isoLocal.slice(0, 10);        // YYYY-MM-DD
+  const offsetMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
 }
 
 /* ---------- Tipler ---------- */
@@ -97,90 +84,93 @@ const SHORT_LABEL: Record<string, string> = {
 /*                           ANA SAYFA COMPONENT                       */
 /* ================================================================== */
 export default function Home() {
-  const [uid, setUid] = useState<string>();
+  // 🔒 Oturum + aktiflik koruması
+  const { uid, loading } = useRequireActiveUser();
+
   const [todayRecs, setTodayRecs] = useState<Rec[]>([]);
   const [allRecs, setAllRecs] = useState<Rec[]>([]);
-  const [monthPages, setMonthPages] = useState(0);
-  const [yearPages, setYearPages] = useState(0);
   const [monthBooks, setMonthBooks] = useState<number>(0);
   const [yearBooks,  setYearBooks]  = useState<number>(0);
 
-  // NEW: günlük hedef
+  // Günlük hedef
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      const id = data.session?.user?.id;
-      setUid(id);
-      if (!id) return;
+    if (!uid) return;
 
-      const today0Iso = startOfToday().toISOString();
+    (async () => {
       const m0 = startOfMonth();
       const y0 = startOfYear();
 
-      /** BU AY biten kitap sayısı */
+      // BU AY biten kitap
       {
-        const { count: mCount, error: mErr } = await supabase
+        const { count: mCount } = await supabase
           .from('books')
           .select('id', { count: 'exact', head: true })
-          .eq('user_id', id)
+          .eq('user_id', uid)
           .eq('is_finished', true)
           .gte('finished_at', m0.toISOString());
-        if (!mErr) setMonthBooks(mCount ?? 0);
+        setMonthBooks(mCount ?? 0);
       }
 
-      /** BU YIL biten kitap sayısı */
+      // BU YIL biten kitap
       {
-        const { count: yCount, error: yErr } = await supabase
+        const { count: yCount } = await supabase
           .from('books')
           .select('id', { count: 'exact', head: true })
-          .eq('user_id', id)
+          .eq('user_id', uid)
           .eq('is_finished', true)
           .gte('finished_at', y0.toISOString());
-        if (!yErr) setYearBooks(yCount ?? 0);
+        setYearBooks(yCount ?? 0);
       }
 
-      // NEW: profiles.daily_goal çek
+      // günlük hedef
       {
         const { data: p } = await supabase
           .from('profiles')
           .select('daily_goal')
-          .eq('id', id)
+          .eq('id', uid)
           .single();
         setDailyGoal(p?.daily_goal ?? null);
       }
 
       // Bugün (records)
-      // 🔸 Günün (01:00–01:00) tarihi
-        const dayKey = dayKey01();
-
-        // Bugün (records) — sadece takvimli kayıtlar, activity_date == dayKey
-        supabase.from('records')
-          .select('id,created_at,subjects(name),question_count,duration_min,note,activity_date,off_calendar')
-          .eq('user_id', id)
+      {
+        const dayKey = todayLocalISODate();
+        const { data } = await supabase
+          .from('records')
+          .select(`
+            id, created_at, activity_date, off_calendar,
+            subject_id, topic_id,
+            subjects(name),
+            topics(name),
+            question_count, duration_min, note
+          `)
+          .eq('user_id', uid)
           .not('question_count', 'is', null)
           .eq('off_calendar', false)
-          .eq('activity_date', dayKey)     // ← 01:00 gün anahtarı
+          .eq('activity_date', dayKey)
           .order('created_at', { ascending: false })
-          .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>()
-          .then(({ data }) => setTodayRecs((data ?? []) as any));
-
+          .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>();
+        setTodayRecs((data ?? []) as any);
+      }
 
       // Tüm records (grafikler)
-      supabase.from('records')
-        .select('id,created_at,subjects(name),question_count,activity_date,off_calendar')
-        .eq('user_id', id)
-        .not('question_count', 'is', null)
-        .order('created_at', { ascending: false })
-        .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>()
-        .then(({ data }) => setAllRecs((data ?? []) as any));
+      {
+        const { data } = await supabase
+          .from('records')
+          .select('id,created_at,subjects(name),question_count,activity_date,off_calendar')
+          .eq('user_id', uid)
+          .not('question_count', 'is', null)
+          .order('created_at', { ascending: false })
+          .returns<Rec[] & { activity_date?: string|null; off_calendar?: boolean }[]>();
+        setAllRecs((data ?? []) as any);
+      }
     })();
-  }, []);
+  }, [uid]);
 
-  /* ---------- Grafik verileri ---------- */
-  const dayKey = useMemo(() => dayKey01(), []); // "YYYY-MM-DD", gün 01:00'da başlar
-  const today0 = startOfToday().getTime();
+  /* ---------- Grafik / özet verileri ---------- */
+  const dayKey = useMemo(() => todayLocalISODate(), []);
   const week0  = startOfWeekMonday().getTime();
 
   const bySubject = useMemo(() => {
@@ -196,16 +186,14 @@ export default function Home() {
 
       agg.total[name] = (agg.total[name] || 0) + q;
       if (r.off_calendar) continue;
-      if (t >= week0)  agg.week[name]  = (agg.week[name]  || 0) + q;
-      if (r.activity_date === dayKey) {
-      agg.today[name] = (agg.today[name] || 0) + q;
-    }
+      if (t >= week0) agg.week[name] = (agg.week[name] || 0) + q;
+      if (r.activity_date === dayKey) agg.today[name] = (agg.today[name] || 0) + q;
     }
     const names = Array.from(new Set([
       ...Object.keys(agg.total), ...Object.keys(agg.week), ...Object.keys(agg.today),
     ])).sort((a,b)=>(agg.total[b]||0)-(agg.total[a]||0));
     return { agg, names };
-  }, [allRecs, today0, week0]);
+  }, [allRecs, week0, dayKey]);
 
   const weeklyTotal = Object.values(bySubject.agg.week).reduce((sum, val) => sum + val, 0);
   const overallTotal = Object.values(bySubject.agg.total).reduce((sum, val) => sum + val, 0);
@@ -241,6 +229,66 @@ export default function Home() {
     SUBJECT_ORDER.map((name) => ({ name, value: bySubject.agg.total[name] || 0 }))
   ), [bySubject]);
 
+  /* ---------- Günün Soruları: ders bazında gruplama + Konuları göster ---------- */
+  type Row = {
+    id: string;
+    off_calendar?: boolean | null;
+    subject_id?: string | null;
+    topic_id?: string | null;
+    subjects?: { name: string } | null;
+    topics?: { name: string } | null;
+    question_count?: number | null;
+    duration_min?: number | null;
+    note?: string | null;
+  };
+
+  // Varsayılan: konular açık
+  const [showTopics, setShowTopics] = useState(true);
+
+  const subjectGroups = useMemo(() => {
+    const bySub = new Map<
+      string,
+      {
+        subjectName: string;
+        totalQuestions: number;
+        sessions: Row[];
+        topics: Map<string, { name: string; totalQuestions: number }>;
+      }
+    >();
+
+    for (const r of (todayRecs as unknown as Row[])) {
+      if (!r || r.off_calendar) continue;
+
+      const subjectName = r.subjects?.name ?? 'Diğer';
+      const subjectKey = r.subject_id ?? subjectName;
+
+      if (!bySub.has(subjectKey)) {
+        bySub.set(subjectKey, {
+          subjectName,
+          totalQuestions: 0,
+          sessions: [],
+          topics: new Map(),
+        });
+      }
+      const g = bySub.get(subjectKey)!;
+
+      const q = r.question_count ?? 0;
+      g.totalQuestions += q;
+      g.sessions.push(r);
+
+      const topicName = r.topics?.name ?? null;
+      if (topicName) {
+        const topicKey = r.topic_id ?? topicName;
+        const cur = g.topics.get(topicKey) ?? { name: topicName, totalQuestions: 0 };
+        cur.totalQuestions += q;
+        g.topics.set(topicKey, cur);
+      }
+    }
+
+    // Dersleri toplam soruya göre sırala
+    return Array.from(bySub.values()).sort((a, b) => b.totalQuestions - a.totalQuestions);
+  }, [todayRecs]);
+
   /* ---------- Bar etiketleri / tooltip ---------- */
   const BarRightLabel = (props: any) => {
     const { x = 0, y = 0, width = 0, height = 0, value } = props;
@@ -255,96 +303,130 @@ export default function Home() {
     return <div className="rounded-md border bg-white px-2 py-1 text-sm shadow-sm">{payload[0].value}</div>;
   };
 
-  // NEW: progress hesapları
+  // Günlük hedef ilerleme
   const hasGoal = typeof dailyGoal === 'number' && dailyGoal! > 0;
   const progressPct = hasGoal ? Math.min(100, Math.round((todayTotal / (dailyGoal as number)) * 100)) : 0;
   const goalDone = hasGoal && todayTotal >= (dailyGoal as number);
 
+  // 🔄 Guard
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-none md:max-w-5xl px-4 py-6">
+        <p className="text-sm text-gray-600">Yükleniyor…</p>
+      </main>
+    );
+  }
+  if (!uid) return null; // kanca /login'e yönlendirdi
+
   return (
-    <main className="mx-auto max-w-none md:max-w-5xl px-1 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
-      {/* === AKTİF KİTAPLAR (üstte) === */}
+    <main className="mx-auto max-w-none md:max-w-5xl px-0 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      {/* === AKTİF KİTAPLAR === */}
       <section className="rounded-xl border bg-white px-2 pt-1 pb-2 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
           <h2 className="text-xl font-semibold">Okuma Kitabım</h2>
           <p className="text-sm text-gray-500">
             {monthBooks > 0 && `Bu ay: ${monthBooks} kitap okudum`}
             {yearBooks > monthBooks && `${monthBooks > 0 ? ', ' : ''}Bu yıl: ${yearBooks} kitap okudum`}
-            {(monthBooks === 0 && yearBooks === 0) && ''}
           </p>
         </div>
-
         <ActiveBooksInline />
       </section>
 
       {/* === GÜNLÜK (liste + pasta) === */}
       <section className="grid gap-4 md:grid-cols-3">
-        {/* Sol: Günlük liste */}
+        {/* Sol: Günlük liste (Ders bazında gruplu) */}
         <div className="md:col-span-2 rounded-xl border bg-white px-2 pt-1 pb-2 shadow-sm space-y-2">
-          {/* NEW: Başlık + Progress */}
-          <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-semibold">Günün Soruları</h2>
+          {/* Başlık + Progress */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-xl font-semibold">Günün Soruları</h2>
 
-            {hasGoal && (
-              <div className="w-full sm:w-80">
+              {hasGoal && (
+                <div className="w-full sm:w-80">
                   <div
-                  className="relative h-6 mb-2 w-full overflow-hidden rounded-full bg-gray-200 shadow-inner"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={dailyGoal as number}
-                  aria-valuenow={Math.min(todayTotal, dailyGoal as number)}
-                  aria-label="Günlük soru hedefi ilerleme"
-                >
-                  <div
-                    className={`absolute left-0 top-0 h-full transition-all duration-500
-                    ${goalDone ? 'bg-gradient-to-r from-emerald-500 to-green-600' : 'bg-gradient-to-r from-indigo-500 to-purple-600'}`}
-                    style={{ width: `${progressPct}%` }}
-                  />
-                  <div className="absolute inset-0 grid place-items-center text-[14px] font-semibold text-black drop-shadow">
-                    {goalDone ? '🎉 Tebrikler! Hedefini Tamamladın' : `Günlük Hedef: ${dailyGoal} Soru, Tamamlanan: % ${progressPct}`}
+                    className="relative h-6 w-full overflow-hidden rounded-md border border-gray-600 bg-gray-100"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={dailyGoal as number}
+                    aria-valuenow={Math.min(todayTotal, dailyGoal as number)}
+                    aria-label="Günlük soru hedefi ilerleme"
+                  >
+                    <div
+                      className={`absolute left-0 top-0 h-full transition-[width] duration-500
+                        ${goalDone ? 'bg-emerald-600' : 'bg-cyan-300'}`} //burada amber rengi progress bar rengi
+                      style={{ width: `${progressPct}%` }}
+                    />
+                    <div className="absolute inset-0 grid place-items-center text-[13px] font-semibold text-black/95"> {/*yazıyı siyah yaptık*/}
+                      {goalDone
+                        ? '🎉 Hedef tamam!'
+                        : `Hedef ${dailyGoal} · Biten %${progressPct}`}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          <ul className="grid gap-2">
-            {todayRecs.map((r) => (
-              <li key={r.id} className="rounded-lg border p-1">
-                <div className="flex justify-between items-center">
-                  <span className="font-medium">{r.subjects?.name ?? 'Ders'}</span>
-                  <span className="font-bold">{r.question_count ?? 0} soru</span>
-                </div>
-                {r.note && <div className="text-sm text-gray-600 mt-1">{r.note}</div>}
-              </li>
-            ))}
 
-            {todayRecs.length > 0 && (
-              <li className="rounded-lg border p-1 bg-teal-300">
+          {/* DERS BAZINDA LİSTE */}
+          {subjectGroups.length === 0 ? (
+            <p className="text-sm text-gray-500">Bugün kayıt yok.</p>
+          ) : (
+            <ul className="grid gap-2">
+              {subjectGroups.map((g, i) => (
+                <li key={i} className="rounded-lg border p-2">
+                  <div className="flex justify-between items-center">
+                    {/* Sol: Ders adı */}
+                    <span className="font-medium">{g.subjectName}</span>
+                    {/* Sağ: NN soru (aynı font/kalınlık) */}
+                    <span className="font-medium">{g.totalQuestions} soru</span>
+                  </div>
+
+                  {/* Konular – varsayılan AÇIK */}
+                  {showTopics && g.topics.size > 0 && (
+                    <ul className="mt-1 text-sm text-gray-700">
+                      {Array.from(g.topics.values()).map((t, idx) => (
+                        <li key={idx} className="pl-4">- {t.name}: {t.totalQuestions}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+
+              {/* TOPLAM (sağda aynı hizada) */}
+              <li className="rounded-lg border p-1 bg-lime-300">
                 <div className="flex justify-between items-center font-semibold">
                   <span>TOPLAM</span>
                   <span>{todayTotal} soru</span>
                 </div>
               </li>
-            )}
+            </ul>
+          )}
 
-            {todayRecs.length === 0 && (
-              <p className="text-sm text-gray-500">Bugün kayıt yok.</p>
-            )}
-          </ul>
+          {/* Anahtar: Konuları göster (varsayılan açık) */}
+          <div className="mt-2">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={showTopics}
+                onChange={(e) => setShowTopics(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Konuları göster
+            </label>
+          </div>
         </div>
 
         {/* Sağ: Günlük pasta grafiği */}
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h3 className="text-xl sm:text-xl font-semibold mb-2">Günlük Dağılım</h3>
-          <div className="h-64 flex items-center justify-center">
+          <h3 className="text-xl sm:text-xl font-semibold mb-0">Günlük Dağılım</h3>
+          <div className="h-56 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 0, bottom: 0 }}>
+              <PieChart margin={{ top: -6, right: 0, bottom: 28, left: 0 }}>
                 <Pie
                   data={pieData}
                   dataKey="value"
                   nameKey="name"
-                  outerRadius="90%"
-                  cy="58%"
+                  outerRadius="82%"
+                  cy="52%"            // grafiği çok aşağı itmeden ortala
                   label={renderPieLabel}
                   labelLine={false}
                   minAngle={5}
@@ -354,7 +436,17 @@ export default function Home() {
                   ))}
                 </Pie>
                 <RTooltip />
-                <Legend verticalAlign="bottom" align="center" wrapperStyle={{ marginBottom: -30 }} formatter={(value: string) => SHORT_LABEL[value] ?? value} />
+
+                {/* Negatif margin'i kaldır; belirgin bir yükseklik ver ki taşmasın */}
+                <Legend
+                  layout="horizontal"
+                  verticalAlign="bottom"
+                  align="center"
+                  iconType="circle"
+                  height={22}                      // alt boşluğu rezerve eder
+                  wrapperStyle={{ marginTop: 2 }}  // çok az yukarı çek
+                  formatter={(value: string) => SHORT_LABEL[value] ?? value}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -370,7 +462,9 @@ export default function Home() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 layout="vertical"
-                data={weeklyData}
+                data={SUBJECT_ORDER
+                  .map((name) => ({ name, value: bySubject.agg.week[name] || 0 }))
+                  .filter((item) => item.value > 0)}
                 margin={{ left: 0, right: 56, top: 8, bottom: 8 }}
                 barSize={22}
                 barCategoryGap={16}
@@ -380,7 +474,10 @@ export default function Home() {
                 <YAxis type="category" dataKey="name" width={65} interval={0} tick={{ fontSize: 12 }} tickFormatter={(n: string) => SHORT_LABEL[n] ?? n} />
                 <RTooltip content={<ValueOnlyTooltip />} />
                 <Bar dataKey="value" name="">
-                  {weeklyData.map((d) => <Cell key={d.name} fill={nameToColor[d.name]} />)}
+                  {SUBJECT_ORDER
+                    .map((name) => ({ name, value: bySubject.agg.week[name] || 0 }))
+                    .filter((item) => item.value > 0)
+                    .map((d) => <Cell key={d.name} fill={nameToColor[d.name]} />)}
                   <LabelList dataKey="value" content={<BarRightLabel />} />
                 </Bar>
               </BarChart>
@@ -395,7 +492,7 @@ export default function Home() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 layout="vertical"
-                data={totalData}
+                data={SUBJECT_ORDER.map((name) => ({ name, value: bySubject.agg.total[name] || 0 }))}
                 margin={{ left: 0, right: 56, top: 8, bottom: 8 }}
                 barSize={22}
                 barCategoryGap={16}
@@ -405,7 +502,8 @@ export default function Home() {
                 <YAxis type="category" dataKey="name" width={65} interval={0} tick={{ fontSize: 12 }} tickFormatter={(n: string) => SHORT_LABEL[n] ?? n} />
                 <RTooltip content={<ValueOnlyTooltip />} />
                 <Bar dataKey="value" name="">
-                  {totalData.map((d) => <Cell key={d.name} fill={nameToColor[d.name]} />)}
+                  {SUBJECT_ORDER.map((name) => ({ name, value: bySubject.agg.total[name] || 0 }))
+                    .map((d) => <Cell key={d.name} fill={nameToColor[d.name]} />)}
                   <LabelList dataKey="value" content={<BarRightLabel />} />
                 </Bar>
               </BarChart>
@@ -434,27 +532,25 @@ export default function Home() {
 /*           AKTİF KİTAPLAR – tek kart + “Bugün okuduğum” girişi       */
 /* ================================================================== */
 function ActiveBooksInline() {
+  const { uid } = useRequireActiveUser();
   const [rows, setRows] = useState<Book[]>([]);
   const [sumByTitle, setSumByTitle] = useState<Record<string, number>>({});
   const [lastPageByTitle, setLastPageByTitle] = useState<Record<string, number>>({});
   const [todayByTitle, setTodayByTitle] = useState<Record<string, number>>({});
   const [currentVals, setCurrentVals] = useState<Record<string, string>>({});
   const [saveBusy, setSaveBusy] = useState<string | null>(null);
-  const [uid, setUid] = useState<string | undefined>();
 
   function startOfTodayLocal() { const d = new Date(); d.setHours(0,0,0,0); return d; }
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      const currentUid = data.session?.user?.id;
-      setUid(currentUid);
-      if (!currentUid) return;
+    if (!uid) return;
 
-      // Kitaplar
+    (async () => {
+      // Kitaplar — SADECE bu kullanıcı
       const { data: books } = await supabase
         .from('books')
         .select('id,title,author,total_pages,cover_url,is_finished,status,created_at,updated_at')
+        .eq('user_id', uid)
         .order('created_at', { ascending: false });
 
       const active = (books ?? []).filter((b: any) =>
@@ -462,10 +558,11 @@ function ActiveBooksInline() {
       ) as Book[];
       setRows(active);
 
-      // Okuma özetleri
+      // Okuma özetleri — SADECE bu kullanıcı
       const { data: logs } = await supabase
         .from('reading_logs')
-        .select('title,pages,page_number,created_at');
+        .select('title,pages,page_number,created_at')
+        .eq('user_id', uid);
 
       const totalMap: Record<string, number> = {};
       const lastMap: Record<string, number> = {};
@@ -495,7 +592,7 @@ function ActiveBooksInline() {
       setLastPageByTitle(lastMap);
       setTodayByTitle(todayMap);
     })();
-  }, []);
+  }, [uid]);
 
   // Kaldığım sayfa kaydet
   async function setCurrentPage(b: Book) {
@@ -551,8 +648,8 @@ function ActiveBooksInline() {
   return (
     <div className="rounded-xl bg-white">
       <div className="flex items-start gap-3">
-        {/* Kapak – mobilde daha geniş görünüm */}
-        <div className="h-[130px] w-[110px] overflow-hidden rounded border bg-gray-100 shrink-0">
+        {/* Kapak — yalnızca PC'de büyütüldü */}
+        <div className="h-[140px] w-[110px] md:h-[85px] md:w-[70px] overflow-hidden rounded border bg-gray-100 shrink-0">
           {b.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={b.cover_url} alt="" className="h-full w-full object-cover" />
@@ -561,75 +658,109 @@ function ActiveBooksInline() {
           )}
         </div>
 
-        {/* Bilgiler */}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{b.title}</div>
-          <div className="truncate text-xs text-gray-600">{b.author ?? '-'}</div>
+          {/* === Başlık + Yazar === */}
+          {/* Mobil: mevcut iki satır (hiç değişmedi) */}
+          <div className="md:hidden">
+            <div className="truncate text-sm font-medium">{b.title}</div>
+            <div className="truncate text-xs text-gray-600">{b.author ?? '-'}</div>
+          </div>
+          {/* PC: tek satırda başlık — yazar */}
+          <div className="hidden md:flex items-baseline gap-2">
+            <div className="truncate text-sm font-medium">{b.title}</div>
+            <span className="text-xs text-gray-600 shrink-0">— {b.author ?? '-'}</span>
+          </div>
 
-          <div className="mt-1 grid gap-1 text-xs">
+          {/* === Bilgiler Satırı === */}
+          {/* Mobil: eski iki satır (değişmedi) */}
+          <div className="mt-1 grid gap-1 text-xs md:hidden">
             <div className="text-emerald-700 text-sm font-semibold">
               Bugün Okunan: <b>{today}</b> Sayfa
             </div>
             <div>
               Toplam Okunan: <b>{read}</b>{total ? <> · Kalan: <b>{remain}</b></> : null}
             </div>
-
+          </div>
+          {/* PC: üç değer tek satır */}
+          <div className="hidden md:flex items-center gap-4 mt-1 text-xs">
+            <div className="text-emerald-700 text-sm font-semibold">
+              Bugün Okunan: <b>{today}</b> Sayfa
             </div>
+            <div>Toplam Okunan: <b>{read}</b> Sayfa</div>
+            {total ? <div>Kalan: <b>{remain}</b> Sayfa</div> : null}
+          </div>
 
-          {/* Progress Bar — daha yüksek, iç yazılı, zemin beyaz, ilerleme turuncu */}
-          <div
-            className="mt-1 relative w-full overflow-hidden rounded-full border bg-white h-5 sm:h-6"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={total || 0}
-            aria-valuenow={read}
-            aria-label="Kitap ilerleme yüzdesi"
-          >
-            {/* dolu kısım */}
+          {/* === Progress bar + Kaldığım Sayfa (PC sağda, mobil altta) === */}
+          <div className="mt-1 md:flex md:items-center md:gap-3">
+            {/* Progress bar */}
             <div
-              className="absolute left-0 top-0 h-full rounded-none bg-orange-500 transition-all duration-500"
-              style={{ width: pct ? `${pct}%` : (read > 0 ? '4px' : '0px') }}
-            />
-            {/* yüzde metni */}
-            <div className="absolute inset-0 grid place-items-center text-[12px] sm:text-[13px] font-semibold">
-              {total ? <>İlerleme: %{pct}</> : 'Toplam sayfa yok'}
+              className="relative w-full overflow-hidden rounded-full border bg-white h-5 sm:h-6 md:flex-1"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={total || 0}
+              aria-valuenow={read}
+              aria-label="Kitap ilerleme yüzdesi"
+            >
+              <div
+                className="absolute left-0 top-0 h-full rounded-none bg-amber-400 transition-all duration-500"
+                style={{ width: pct ? `${pct}%` : (read > 0 ? '4px' : '0px') }}
+              />
+              <div className="absolute inset-0 grid place-items-center text-[12px] sm:text-[13px] font-semibold">
+                {total ? <>İlerleme: %{pct}</> : 'Toplam sayfa yok'}
+              </div>
+            </div>
+
+            {/* MOBİL: barın ALTINDA (görünür), PC’de gizli */}
+            <div className="mt-1 flex items-center justify-between gap-2 md:hidden">
+              <span className="text-xs text-gray-900">Kaldığım Sayfa:</span>
+              <div className="flex items-center gap-2">
+                <label htmlFor={inputId2} className="sr-only">Kaldığım sayfa</label>
+                <input
+                  id={inputId2}
+                  type="number"
+                  inputMode="numeric"
+                  placeholder={lastPage != null ? String(lastPage) : 'Örn. 185'}
+                  className="w-12 h-7 rounded border px-2 text-sm"
+                  value={currentVals[b.id] ?? ''}
+                  onChange={(e) => setCurrentVals((s) => ({ ...s, [b.id]: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') setCurrentPage(b); }}
+                />
+                <button
+                  onClick={() => setCurrentPage(b)}
+                  disabled={saveBusy === b.id}
+                  className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
+                >
+                  {saveBusy === b.id ? 'Kaydediliyor…' : 'Kaydet'}
+                </button>
+              </div>
+            </div>
+
+            {/* PC: barın SAĞINDA (görünür), mobilde gizli */}
+            <div className="mt-1 hidden md:flex items-center gap-2 shrink-0">
+              <span className="text-xs text-gray-900">Kaldığım Sayfa:</span>
+              <label htmlFor={inputId2} className="sr-only">Kaldığım sayfa</label>
+              <input
+                id={inputId2}
+                type="number"
+                inputMode="numeric"
+                placeholder={lastPage != null ? String(lastPage) : 'Örn. 185'}
+                className="w-14 h-7 rounded border px-2 text-sm"
+                value={currentVals[b.id] ?? ''}
+                onChange={(e) => setCurrentVals((s) => ({ ...s, [b.id]: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') setCurrentPage(b); }}
+              />
+              <button
+                onClick={() => setCurrentPage(b)}
+                disabled={saveBusy === b.id}
+                className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
+              >
+                {saveBusy === b.id ? 'Kaydediliyor…' : 'Kaydet'}
+              </button>
             </div>
           </div>
 
-          {/* Kaldığım sayfayı ekle */}
-          <div className="mt-1 flex items-center justify-between gap-2">
-            {/* Sağ taraf: açıklama */}
-  <span className="text-xs text-gray-900">
-    Kaldığım Sayfa:
-  </span>
-            {/* Sol taraf: input + buton */}
-  <div className="flex items-center gap-2">
-    <label htmlFor={inputId2} className="sr-only">Kaldığım sayfa</label>
-    <input
-      id={inputId2}
-      type="number"
-      inputMode="numeric"
-      placeholder={lastPage != null ? String(lastPage) : 'Örn. 185'}
-      className="w-12 h-7 rounded border px-2 text-sm"
-      value={currentVals[b.id] ?? ''}
-      onChange={(e) => setCurrentVals((s) => ({ ...s, [b.id]: e.target.value }))}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') setCurrentPage(b);
-      }}
-    />
-    <button
-      onClick={() => setCurrentPage(b)}
-      disabled={saveBusy === b.id}
-      className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
-    >
-      {saveBusy === b.id ? 'Kaydediliyor…' : 'Kaydet'}
-    </button>
-  </div>
-
-
-</div>
-          </div>
         </div>
       </div>
+    </div>
   );
 }

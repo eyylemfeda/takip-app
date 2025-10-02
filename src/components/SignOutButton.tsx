@@ -4,9 +4,16 @@ import { useRouter } from 'next/navigation';
 
 export default function SignOutButton() {
   const router = useRouter();
+
   const handleClick = async () => {
-    await supabase.auth.signOut();
-    router.replace('/login');
+    try {
+      // Oturumu sonlandır
+      await supabase.auth.signOut();
+    } finally {
+      // Hemen login'e yönlendir ve UI'ı tazele
+      router.replace('/login');
+      router.refresh();
+    }
   };
 
   return (
