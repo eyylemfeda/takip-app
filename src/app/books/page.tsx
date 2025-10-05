@@ -5,8 +5,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { startOfToday } from 'date-fns';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
-import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
 
 type BookRow = {
   id: string;
