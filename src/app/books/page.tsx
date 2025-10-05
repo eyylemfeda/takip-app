@@ -497,7 +497,7 @@ export default function BooksPage() {
   // ✅ Normal render
   return (
     <main className="mx-auto max-w-none md:max-w-5xl px-2 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-8">
-      <Suspense fallback={<div>Yükleniyor...</div>}>
+      <Suspense fallback={null}>
         <SearchParamsReader />
       </Suspense>
       {/* Üst başlık */}
