@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -17,22 +17,24 @@ export function useRequireActiveUser() {
   const pathname = usePathname();
   const params = useSearchParams();
 
-  // Mevcut tam yolu next için üret
-  const nextUrl = useMemo(() => {
-    const qs = params?.toString() ?? '';
-    return qs ? `${pathname}?${qs}` : pathname;
-  }, [pathname, params]);
-
   const [uid, setUid] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [nextUrl, setNextUrl] = useState<string | null>(null);
+
+  // nextUrl'i client tarafında hesapla (bu önemli)
+  useEffect(() => {
+    const qs = params?.toString() ?? '';
+    const fullUrl = qs ? `${pathname}?${qs}` : pathname;
+    setNextUrl(fullUrl);
+  }, [pathname, params]);
 
   useEffect(() => {
+    if (!nextUrl) return; // nextUrl hazır değilse bekle
     let cancelled = false;
 
     (async () => {
       setLoading(true);
 
-      // 1) Oturum var mı?
       const { data: sessionData } = await supabase.auth.getSession();
       const id = sessionData.session?.user?.id ?? null;
 
@@ -45,7 +47,6 @@ export function useRequireActiveUser() {
         return;
       }
 
-      // 2) Aktiflik kontrolü
       const { data: prof } = await supabase
         .from('profiles')
         .select('is_active')
@@ -62,7 +63,6 @@ export function useRequireActiveUser() {
         return;
       }
 
-      // 3) Giriş + aktif
       if (!cancelled) {
         setUid(id);
         setLoading(false);
