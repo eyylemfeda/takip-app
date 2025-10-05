@@ -5,7 +5,24 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { startOfToday } from 'date-fns';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
+function SearchParamsConsumer() {
+  const searchParams = useSearchParams();
+  const selected = searchParams.get('selected');
+
+  return (
+    <div>
+      <h1>Kitaplar</h1>
+      {selected ? (
+        <p>Seçilen kitap ID: {selected}</p>
+      ) : (
+        <p>Herhangi bir kitap seçilmedi.</p>
+      )}
+    </div>
+  );
+}
 type BookRow = {
   id: string;
   user_id: string;
@@ -22,6 +39,8 @@ type BookRow = {
 
 type SumMap = Record<string, number>;
 type LastPageMap = Record<string, number>;
+
+
 
 export default function BooksPage() {
   // 🔒 Login + aktiflik koruması (hook)
