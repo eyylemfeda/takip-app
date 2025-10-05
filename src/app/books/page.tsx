@@ -8,21 +8,6 @@ import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
-function SearchParamsConsumer() {
-  const searchParams = useSearchParams();
-  const selected = searchParams.get('selected');
-
-  return (
-    <div>
-      <h1>Kitaplar</h1>
-      {selected ? (
-        <p>Seçilen kitap ID: {selected}</p>
-      ) : (
-        <p>Herhangi bir kitap seçilmedi.</p>
-      )}
-    </div>
-  );
-}
 type BookRow = {
   id: string;
   user_id: string;
