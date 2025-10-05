@@ -6,7 +6,10 @@ import { supabase } from '@/lib/supabaseClient';
 import { startOfToday } from 'date-fns';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 import { Suspense } from 'react';
-import SearchParamsReader from './SearchParamsReader';
+import dynamic from 'next/dynamic';
+const SearchParamsReader = dynamic(() => import('./SearchParamsReader'), {
+  ssr: false,
+});
 
 type BookRow = {
   id: string;
@@ -497,7 +500,7 @@ export default function BooksPage() {
   // ✅ Normal render
   return (
     <main className="mx-auto max-w-none md:max-w-5xl px-2 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-8">
-      <Suspense fallback={null}>
+      <Suspense fallback={<div>Yükleniyor...</div>}>
         <SearchParamsReader />
       </Suspense>
       {/* Üst başlık */}
