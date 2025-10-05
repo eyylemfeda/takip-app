@@ -508,6 +508,9 @@ export default function BooksPage() {
   // ✅ Normal render
   return (
     <main className="mx-auto max-w-none md:max-w-5xl px-2 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-8">
+      <Suspense fallback={<div>Yükleniyor...</div>}>
+        <SearchParamsReader />
+      </Suspense>
       {/* Üst başlık */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Kitaplarım</h1>
@@ -750,4 +753,13 @@ export default function BooksPage() {
       </div>
     </main>
   );
+}
+
+function SearchParamsReader() {
+  const searchParams = useSearchParams();
+  const selected = searchParams.get('selected');
+
+  if (!selected) return null;
+
+  return <p>Seçilen kitap ID: {selected}</p>;
 }
