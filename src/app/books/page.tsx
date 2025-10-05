@@ -740,9 +740,6 @@ export default function BooksPage() {
           </div>
         </section>
       </div>
-      <Suspense>
-        <SearchParamsReader />
-      </Suspense>
-    </main>
+          </main>
   );
 }
