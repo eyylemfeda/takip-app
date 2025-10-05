@@ -3,8 +3,8 @@
 import { useSearchParams } from 'next/navigation';
 
 export default function SearchParamsReader() {
-  const params = useSearchParams();
-  const selected = params.get('selected');
+  const searchParams = useSearchParams();
+  const selected = searchParams.get('selected');
 
   if (!selected) return null;
 

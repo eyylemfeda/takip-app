@@ -7,9 +7,8 @@ import { startOfToday } from 'date-fns';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
-const SearchParamsReader = dynamic(() => import('./SearchParamsReader'), {
-  ssr: false,
-});
+const SearchParamsReader = dynamic(() => import('./SearchParamsReader'), { ssr: false });
+
 
 type BookRow = {
   id: string;
@@ -494,6 +493,7 @@ export default function BooksPage() {
     );
   }
 
+
   // 🚪 uid yoksa render etme (kanca /login'e attı)
   if (!uid) return null;
 
@@ -503,6 +503,7 @@ export default function BooksPage() {
       <Suspense fallback={<div>Yükleniyor...</div>}>
         <SearchParamsReader />
       </Suspense>
+
       {/* Üst başlık */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Kitaplarım</h1>
