@@ -6,18 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { startOfToday } from 'date-fns';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-
-function SearchParamsDisplay() {
-  const searchParams = useSearchParams();
-  const selected = searchParams.get('selected');
-
-  return (
-    <div className="text-sm text-gray-500 mb-4">
-      {selected ? `Seçilen kitap ID: ${selected}` : 'Herhangi bir kitap seçilmedi.'}
-    </div>
-  );
-}
+import SearchParamsReader from './SearchParamsReader';
 
 type BookRow = {
   id: string;
@@ -751,15 +740,9 @@ export default function BooksPage() {
           </div>
         </section>
       </div>
+      <Suspense>
+        <SearchParamsReader />
+      </Suspense>
     </main>
   );
-}
-
-function SearchParamsReader() {
-  const searchParams = useSearchParams();
-  const selected = searchParams.get('selected');
-
-  if (!selected) return null;
-
-  return <p>Seçilen kitap ID: {selected}</p>;
 }
