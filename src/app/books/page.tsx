@@ -5,6 +5,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { startOfToday } from 'date-fns';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+
+function SearchParamsDisplay() {
+  const searchParams = useSearchParams();
+  const selected = searchParams.get('selected');
+
+  return (
+    <div className="text-sm text-gray-500 mb-4">
+      {selected ? `Seçilen kitap ID: ${selected}` : 'Herhangi bir kitap seçilmedi.'}
+    </div>
+  );
+}
 
 type BookRow = {
   id: string;
