@@ -1,8 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import nextDynamic from 'next/dynamic';
+
+const SignupParams = nextDynamic(() => import('./SignupParams'), { ssr: false });
 
 export const dynamic = 'force-dynamic';
 
@@ -10,9 +13,8 @@ const USERNAME_RE = /^[a-z0-9_.-]{3,20}$/i;
 
 export default function SignupPage() {
   const router = useRouter();
-  const params = useSearchParams();
-  const code = params.get('code') || '';
 
+  const [code, setCode] = useState<string>('');
   const [checking, setChecking] = useState(true);
   const [valid, setValid] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
@@ -25,8 +27,9 @@ export default function SignupPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Daveti doğrula
+  // 🔍 Daveti doğrula
   useEffect(() => {
+    if (!code) return;
     (async () => {
       setChecking(true);
       try {
@@ -66,7 +69,7 @@ export default function SignupPage() {
     }
   }
 
-  // Kayıt (e-posta doğrulaması KAPALI ise anında session gelir → invite claim + redirect)
+  // 📝 Kayıt işlemi
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
@@ -90,18 +93,15 @@ export default function SignupPage() {
         email,
         password,
         options: {
-          // Doğrulama kapalı olduğundan redirect vermiyoruz
           data: { username },
         },
       });
       if (error) throw error;
 
-      // Doğrulama kapalı ise burada session gelir → daveti claim et ve içeri al
       if (data.session) {
         try {
           await supabase.rpc('claim_invite', { p_code: code, p_username: username });
         } catch (e) {
-          // idempotent; hata verirse bile akışı durdurma
           console.warn('claim_invite failed:', e);
         }
         router.replace('/');
@@ -109,8 +109,6 @@ export default function SignupPage() {
         return;
       }
 
-      // İLERİDE doğrulamayı yeniden açarsan buraya düşer:
-      // e-postadaki linke basmalarını iste
       router.replace('/login?verify=1');
     } catch (e: any) {
       setErr(e?.message || 'Kayıt başarısız.');
@@ -120,8 +118,16 @@ export default function SignupPage() {
   }
 
   if (checking) {
-    return <main className="p-6 text-sm text-gray-600">Davet kontrol ediliyor…</main>;
+    return (
+      <main className="p-6 text-sm text-gray-600">
+        Davet kontrol ediliyor…
+        <Suspense fallback={<div>Yükleniyor...</div>}>
+          <SignupParams onFound={(c: string | null) => setCode(c || '')} />
+        </Suspense>
+      </main>
+    );
   }
+
   if (!valid) {
     const msg =
       reason === 'expired'
