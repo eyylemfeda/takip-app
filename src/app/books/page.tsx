@@ -529,16 +529,12 @@ export default function BooksPage() {
 
       {msg && <p className="text-sm text-red-600">{msg}</p>}
 
-      {/* ===== MOBİL: 3 PANELLİ YATAY KAYDIRMA ===== */}
+      {/* ===== MOBİL: 2 PANELLİ YATAY KAYDIRMA ===== */}
       <div className="md:hidden -mx-3 px-1">
         <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto">
-          {/* Panel 1: Okuma Kitabım */}
-          <div className="min-w-full snap-start">
-            <MobileReadingPanel />
-          </div>
-
-          {/* Panel 2: Kitaplar */}
+          {/* Panel 1: Kitaplar */}
           <div className="min-w-full snap-start space-y-3">
+            {/* Aktif Kitaplar */}
             <section className="rounded-xl border bg-white shadow-sm">
               <div className="border-b px-3 py-2 font-semibold">Aktif</div>
               <div className="overflow-x-auto">
@@ -568,6 +564,7 @@ export default function BooksPage() {
               </div>
             </section>
 
+            {/* Pasif Kitaplar */}
             <section className="rounded-xl border bg-white shadow-sm">
               <div className="border-b px-3 py-2 font-semibold">Pasif</div>
               <div className="overflow-x-auto">
@@ -597,6 +594,7 @@ export default function BooksPage() {
               </div>
             </section>
 
+            {/* Biten Kitaplar */}
             <section className="rounded-xl border bg-white shadow-sm">
               <div className="border-b px-3 py-2 font-semibold">Biten</div>
               <div className="overflow-x-auto">
@@ -627,7 +625,7 @@ export default function BooksPage() {
             </section>
           </div>
 
-          {/* Panel 3: Okuma kayıtları kısayolu */}
+          {/* Panel 2: Okuma Kayıtları */}
           <div className="min-w-full snap-start">
             <div className="rounded-xl border bg-white p-3 shadow-sm">
               <div className="mb-2 text-base font-semibold">Okuma Kayıtları</div>
@@ -644,13 +642,12 @@ export default function BooksPage() {
           </div>
         </div>
 
-        {/* küçük ipucu */}
+        {/* ipucu güncellendi */}
         <div className="mt-2 flex justify-center gap-2 text-[11px] text-gray-500">
-          <span>◀︎ sola kaydır: kitaplar</span>
-          <span>•</span>
-          <span>bir daha kaydır: kayıtlar</span>
+          <span>◀︎ sola kaydır: kayıtlar</span>
         </div>
       </div>
+
 
       {/* ===== DESKTOP ===== */}
       <div className="hidden md:block space-y-2 lg:space-y-4">
