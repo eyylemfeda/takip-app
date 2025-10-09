@@ -368,7 +368,15 @@ export default function Home() {
 
           {/* DERS BAZINDA LİSTE */}
           {subjectGroups.length === 0 ? (
-            <p className="text-sm text-gray-500">Bugün kayıt yok.</p>
+            <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+              <span className="text-2xl mb-2">🎯</span>
+              <p className="text-sm text-center">
+                Bugün henüz soru girişi yapılmadı. <br />
+                <span className="text-emerald-600 font-medium">
+                  Hadi, çözdüğün soruları girmeye başla ve <br /> günlük hedefine ilerle!
+                </span>
+              </p>
+            </div>
           ) : (
             <ul className="grid gap-2">
               {subjectGroups.map((g, i) => (
@@ -416,41 +424,43 @@ export default function Home() {
         </div>
 
         {/* Sağ: Günlük pasta grafiği */}
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h3 className="text-xl sm:text-xl font-semibold mb-0">Günlük Dağılım</h3>
-          <div className="h-56 flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: -6, right: 0, bottom: 28, left: 0 }}>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  outerRadius="82%"
-                  cy="52%"            // grafiği çok aşağı itmeden ortala
-                  label={renderPieLabel}
-                  labelLine={false}
-                  minAngle={5}
-                >
-                  {pieData.map((d, i) => (
-                    <Cell key={d.name} fill={nameToColor[d.name] || COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <RTooltip />
+        {pieData && pieData.length > 0 && (
+          <div className="rounded-xl border bg-white p-4 shadow-sm">
+            <h3 className="text-xl sm:text-xl font-semibold mb-0">Günlük Dağılım</h3>
+            <div className="h-56 flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: -6, right: 0, bottom: 28, left: 0 }}>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius="82%"
+                    cy="52%"            // grafiği çok aşağı itmeden ortala
+                    label={renderPieLabel}
+                    labelLine={false}
+                    minAngle={5}
+                  >
+                    {pieData.map((d, i) => (
+                      <Cell key={d.name} fill={nameToColor[d.name] || COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RTooltip />
 
-                {/* Negatif margin'i kaldır; belirgin bir yükseklik ver ki taşmasın */}
-                <Legend
-                  layout="horizontal"
-                  verticalAlign="bottom"
-                  align="center"
-                  iconType="circle"
-                  height={22}                      // alt boşluğu rezerve eder
-                  wrapperStyle={{ marginTop: 2 }}  // çok az yukarı çek
-                  formatter={(value: string) => SHORT_LABEL[value] ?? value}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+                  {/* Negatif margin'i kaldır; belirgin bir yükseklik ver ki taşmasın */}
+                  <Legend
+                    layout="horizontal"
+                    verticalAlign="bottom"
+                    align="center"
+                    iconType="circle"
+                    height={22}                      // alt boşluğu rezerve eder
+                    wrapperStyle={{ marginTop: 2 }}  // çok az yukarı çek
+                    formatter={(value: string) => SHORT_LABEL[value] ?? value}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       {/* === HAFTALIK & TOPLAM — YATAY ÇUBUK === */}
@@ -524,9 +534,14 @@ export default function Home() {
           );
         })()}
       </section>
+      {/* === ALT BİLGİ / FOOTER === */}
+      <footer className="text-center text-xs text-gray-500 mt-4 pb-4">
+        © {new Date().getFullYear()} — Öğrenci Takip Uygulaması <br/><span className="font-medium text-gray-700">Hakan OBALI</span> tarafından geliştirilmiştir.
+      </footer>
     </main>
   );
 }
+
 
 /* ================================================================== */
 /*           AKTİF KİTAPLAR – tek kart + “Bugün okuduğum” girişi       */
