@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
+import { useSearchParams, useRouter } from 'next/navigation';
+
 
 /* ========= Tipler ========= */
 type Subject = { id: string; name: string };
@@ -27,6 +29,10 @@ function formatDMYFromISO(iso: string) {
 export default function NewRecordPage() {
   // → Ortak kanca: oturum/aktiflik koruması
   const { uid, loading } = useRequireActiveUser();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const editId = searchParams.get('id');
+
 
   // form alanları
   const [subjectId, setSubjectId] = useState('');
@@ -73,6 +79,35 @@ export default function NewRecordPage() {
         setSourceId('');
         return;
       }
+  /* ========= Düzenleme modunda veriyi yükle ========= */
+  useEffect(() => {
+    if (!uid || !editId) return;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('records')
+        .select('*')
+        .eq('id', editId)
+        .maybeSingle();
+
+      if (error || !data) return;
+
+      // Veriyi form alanlarına aktar
+      setSubjectId(data.subject_id || '');
+      setTopicId(data.topic_id || '');
+      setSourceId(data.source_id || '');
+      setQuestionCount(data.question_count?.toString() || '');
+      setDurationMin(data.duration_min?.toString() || '');
+      setNote(data.note || '');
+      if (data.off_calendar) {
+        setDateMode('off');
+      } else if (data.activity_date) {
+        setDateMode('specific');
+        setSpecificDate(data.activity_date);
+      }
+    })();
+  }, [uid, editId]);
+
 
       // Konular (ders bazlı)
       const { data: t1 } = await supabase
@@ -127,28 +162,52 @@ export default function NewRecordPage() {
 
   /* ========= Kayıt oluştur ========= */
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!uid) return setMsg('Giriş gerekli.');
-    if (!subjectId) return setMsg('Ders seçiniz.');
+  e.preventDefault();
+  if (!uid) return setMsg('Giriş gerekli.');
+  if (!subjectId) return setMsg('Ders seçiniz.');
 
-    const q = questionCount ? Number(questionCount) : null;
-    const d = durationMin ? Number(durationMin) : null;
-    if (q === null && d === null) {
-      return setMsg('En az birini doldurun: Soru sayısı veya Çalışma süresi.');
+  const q = questionCount ? Number(questionCount) : null;
+  const d = durationMin ? Number(durationMin) : null;
+  if (q === null && d === null) {
+    return setMsg('En az birini doldurun: Soru sayısı veya Çalışma süresi.');
+  }
+
+  let activity_date: string | null = null;
+  let off_calendar = false;
+  if (dateMode === 'today') {
+    activity_date = todayLocalISODate();
+  } else if (dateMode === 'specific') {
+    activity_date = specificDate || todayLocalISODate();
+  } else {
+    off_calendar = true;
+  }
+
+  setMsg(undefined);
+
+  if (editId) {
+    // 🟡 Düzenleme modu
+    const { error } = await supabase
+      .from('records')
+      .update({
+        subject_id: subjectId,
+        topic_id: topicId || null,
+        source_id: sourceId || null,
+        question_count: q,
+        duration_min: d,
+        note: note?.trim() || null,
+        activity_date,
+        off_calendar,
+      })
+      .eq('id', editId);
+
+    if (error) {
+      setMsg(error.message);
+      return;
     }
-
-    let activity_date: string | null = null;
-    let off_calendar = false;
-    if (dateMode === 'today') {
-      activity_date = todayLocalISODate();
-    } else if (dateMode === 'specific') {
-      activity_date = specificDate || todayLocalISODate();
-    } else {
-      off_calendar = true;
-      activity_date = null;
-    }
-
-    setMsg(undefined);
+    setMsg('Kayıt güncellendi.');
+    router.push('/records');
+  } else {
+    // 🟢 Yeni kayıt modu
     const { error } = await supabase.from('records').insert({
       user_id: uid,
       subject_id: subjectId,
@@ -165,7 +224,7 @@ export default function NewRecordPage() {
       setMsg(error.message);
       return;
     }
-    // Temizlik
+
     setQuestionCount('');
     setDurationMin('');
     setNote('');
@@ -173,6 +232,7 @@ export default function NewRecordPage() {
     setSourceId('');
     setMsg('Kayıt oluşturuldu.');
   }
+}
 
   const subjectName = useMemo(
     () => subjects.find(s => s.id === subjectId)?.name ?? '',
@@ -194,7 +254,9 @@ export default function NewRecordPage() {
     <main className="py-3 sm:py-5 space-y-3 sm:space-y-4">
       {/* Üst bar: başlık + sağda aksiyonlar */}
       <div className="mb-3 sm:mb-4 md:mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Çalışma Ekle</h1>
+        <h1 className="text-2xl font-bold">
+          {editId ? 'Kaydı Düzenle' : 'Çalışma Ekle'}
+        </h1>
 
         <div className="flex items-center gap-2">
           {/* Kayıt listesi */}
@@ -355,9 +417,9 @@ export default function NewRecordPage() {
         <div className="pt-1 flex justify-end">
           <button
             type="submit"
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+            className="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
           >
-            Kaydı Oluştur
+            {editId ? 'Kaydı Güncelle' : 'Kaydı Kaydet'}
           </button>
         </div>
       </form>

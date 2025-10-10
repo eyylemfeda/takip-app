@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
@@ -32,7 +33,7 @@ function formatDMYFromISO(iso: string | null) {
 
 export default function RecordsPage() {
   const { uid, loading } = useRequireActiveUser();
-
+  const router = useRouter();
   const [rows, setRows] = useState<RecordRow[]>([]);
   const [busy, setBusy] = useState(true);
   const [msg, setMsg] = useState<string>();
@@ -129,36 +130,64 @@ export default function RecordsPage() {
           <ul className="divide-y">
             {rows.map((r) => (
               <li key={r.id} className="p-3 sm:p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="font-medium">
-                      {r.subject?.name || 'Ders'} {r.topic?.name ? `• ${r.topic.name}` : ''}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {r.off_calendar
+                <div className="flex flex-col text-sm text-gray-800 space-y-1">
+
+                  {/* 1️⃣ Tarih, Ders ve Soru Sayısı */}
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">
+                      {(r.off_calendar
                         ? 'Takvim dışı'
                         : formatDMYFromISO(r.activity_date) ||
-                          formatDMYFromISO(todayLocalISODate())}
-                      {r.source?.name ? ` • ${r.source.name}` : ''}
+                          formatDMYFromISO(todayLocalISODate()))}{' '}
+                      • {r.subject?.name || 'Ders'}
                     </div>
-                    {r.note && (
-                      <div className="mt-1 text-sm text-gray-700">
-                        {r.note}
-                      </div>
+
+                    {r.question_count != null && (
+                      <span className="inline-block rounded border border-gray-300 px-2 py-0.5 text-sm">
+                        {r.question_count} Soru
+                      </span>
                     )}
                   </div>
 
-                  <div className="text-sm text-gray-700">
-                    {r.question_count != null && (
-                      <span className="inline-block rounded border px-2 py-1 mr-1">
-                        Soru: {r.question_count}
-                      </span>
-                    )}
-                    {r.duration_min != null && (
-                      <span className="inline-block rounded border px-2 py-1">
-                        Süre: {r.duration_min} dk
-                      </span>
-                    )}
+                  {/* 2️⃣ Kaynak */}
+                  {r.source?.name && (
+                    <div className="font-semibold text-gray-700">{r.source.name}</div>
+                  )}
+
+                  {/* 3️⃣ Konu */}
+                  {r.topic?.name && (
+                    <div className="font-semibold">{r.topic.name}</div>
+                  )}
+
+                  {/* 4️⃣ Butonlar */}
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    {/* 🧡 Güncelle */}
+                    <button
+                      onClick={() => router.push(`/records/new?id=${r.id}`)}
+                      className="rounded border border-orange-300 bg-orange-50 px-2 py-1 text-xs text-orange-700 hover:bg-orange-100"
+                    >
+                      Güncelle
+                    </button>
+
+                    {/* 🔴 Sil */}
+                    <button
+                      onClick={async () => {
+                        if (confirm("Bu kaydı silmek istediğine emin misin?")) {
+                          const { error } = await supabase
+                            .from("records")
+                            .delete()
+                            .eq("id", r.id);
+                          if (!error) {
+                            setRows((prev) => prev.filter((item) => item.id !== r.id));
+                          } else {
+                            alert("Silme işlemi başarısız: " + error.message);
+                          }
+                        }
+                      }}
+                      className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 hover:bg-red-100"
+                    >
+                      Sil
+                    </button>
                   </div>
                 </div>
               </li>
