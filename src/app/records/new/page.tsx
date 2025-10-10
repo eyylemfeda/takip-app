@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense } from "react";
 
 
 /* ========= Tipler ========= */
@@ -28,7 +29,7 @@ function formatDMYFromISO(iso: string) {
   return `${d}.${m}.${y}`;
 }
 
-export default function NewRecordPage() {
+function NewRecordInner() {
   // → Ortak kanca: oturum/aktiflik koruması
   const { uid, loading } = useRequireActiveUser();
   const searchParams = useSearchParams();
@@ -426,5 +427,15 @@ export default function NewRecordPage() {
         </div>
       </form>
     </main>
+  );
+}
+
+// ✅ Suspense ile sarmalanmış dış bileşen (asıl export)
+
+export default function NewRecordPage() {
+  return (
+    <Suspense fallback={<div>Yükleniyor...</div>}>
+      <NewRecordInner />
+    </Suspense>
   );
 }
