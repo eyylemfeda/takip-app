@@ -7,8 +7,6 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 
 type Subject = { id: string; name: string };
 type Topic = { id: string; name: string; subject_id: string };
