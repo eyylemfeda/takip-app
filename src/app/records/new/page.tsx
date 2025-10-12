@@ -1,94 +1,72 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { useEffect, useMemo, useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-// YYYY-MM-DD (yerel saat) döndürür
-function todayLocalISODate(): string {
+
+type Subject = { id: string; name: string };
+type Topic = { id: string; name: string; subject_id: string };
+type Source = { id: string; name: string; subject_id: string; user_id: string };
+
+function todayLocalISODate() {
   const now = new Date();
-  const tz = now.getTimezoneOffset();
-  const local = new Date(now.getTime() - tz * 60_000);
-  return local.toISOString().slice(0, 10);
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
 }
 
-
-interface Subject {
-  id: string;
-  name: string;
+function formatDMYFromISO(iso: string) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
 }
 
-interface Topic {
-  id: string;
-  name: string;
-  subject_id: string;
-}
-
-interface Source {
-  id: string;
-  name: string;
-  subject_id: string;
-  user_id: string;
-}
-
-export default function NewRecordPage() {
-  const router = useRouter();
+function NewRecordInner() {
+  const { uid, loading } = useRequireActiveUser();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const editId = searchParams.get('id');
 
-  const [uid, setUid] = useState<string | null>(null);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subjectId, setSubjectId] = useState('');
-  const [topics, setTopics] = useState<Topic[]>([]);
   const [topicId, setTopicId] = useState('');
-  const [sources, setSources] = useState<Source[]>([]);
   const [sourceId, setSourceId] = useState('');
   const [questionCount, setQuestionCount] = useState('');
   const [durationMin, setDurationMin] = useState('');
   const [note, setNote] = useState('');
-  const [msg, setMsg] = useState<string | undefined>();
   const [dateMode, setDateMode] = useState<'today' | 'specific' | 'off'>('today');
-  const [specificDate, setSpecificDate] = useState<string>('');
-  const [addingSource, setAddingSource] = useState(false);
+  const [specificDate, setSpecificDate] = useState(todayLocalISODate());
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
   const [newSourceName, setNewSourceName] = useState('');
+  const [addingSource, setAddingSource] = useState(false);
+  const [msg, setMsg] = useState<string>();
 
-  // ========= Oturum UID'sini al =========
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.replace('/signin');
-        return;
-      }
-      setUid(session.user.id);
-    });
-  }, [router]);
-
-  // ========= Dersleri yükle =========
+  /* ========= Dersleri yükle ========= */
   useEffect(() => {
     if (!uid) return;
     (async () => {
-      const { data: s1 } = await supabase
-        .from('subjects')
-        .select('id,name')
-        .order('name');
-      setSubjects((s1 ?? []) as Subject[]);
+      const { data } = await supabase.from('subjects').select('id,name').order('name');
+      setSubjects((data ?? []) as Subject[]);
     })();
   }, [uid]);
 
-  // ========= Ders seçimine göre konular & kaynaklar =========
+  /* ========= Ders seçimine göre konular & kaynaklar ========= */
   useEffect(() => {
-    (async () => {
-      if (!uid || !subjectId) {
-        setTopics([]);
-        setSources([]);
-        setTopicId('');
-        setSourceId('');
-        return;
-      }
+    if (!subjectId) {
+      setTopics([]);
+      setSources([]);
+      setTopicId('');
+      setSourceId('');
+      return;
+    }
 
-      // Konular
+    (async () => {
       const { data: t1 } = await supabase
         .from('topics')
         .select('id,name,subject_id')
@@ -96,7 +74,6 @@ export default function NewRecordPage() {
         .order('name');
       setTopics((t1 ?? []) as Topic[]);
 
-      // Kaynaklar
       const { data: s2 } = await supabase
         .from('sources')
         .select('id,name,subject_id,user_id')
@@ -107,7 +84,7 @@ export default function NewRecordPage() {
     })();
   }, [uid, subjectId]);
 
-  // ========= Düzenleme modunda veriyi yükle =========
+  /* ========= Düzenleme modunda veriyi yükle ========= */
   useEffect(() => {
     if (!uid || !editId) return;
 
@@ -126,7 +103,6 @@ export default function NewRecordPage() {
       setQuestionCount(data.question_count?.toString() || '');
       setDurationMin(data.duration_min?.toString() || '');
       setNote(data.note || '');
-
       if (data.off_calendar) {
         setDateMode('off');
       } else if (data.activity_date) {
@@ -136,7 +112,7 @@ export default function NewRecordPage() {
     })();
   }, [uid, editId]);
 
-  // ========= Yeni kaynak ekle =========
+  /* ========= Yeni kaynak ekle ========= */
   async function handleAddSource() {
     if (!uid) return alert('Giriş gerekli.');
     if (!subjectId) return alert('Önce ders seçiniz.');
@@ -154,7 +130,7 @@ export default function NewRecordPage() {
 
       if (error) throw error;
 
-      setSources(prev => [...prev, data as Source].sort((a, b) => a.name.localeCompare(b.name)));
+      setSources((prev) => [...prev, data as Source].sort((a, b) => a.name.localeCompare(b.name)));
       setSourceId((data as Source).id);
       setNewSourceName('');
     } catch (e: any) {
@@ -168,7 +144,7 @@ export default function NewRecordPage() {
     }
   }
 
-  // ========= Kayıt oluştur =========
+  /* ========= Kayıt oluştur ========= */
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!uid) return setMsg('Giriş gerekli.');
@@ -190,41 +166,90 @@ export default function NewRecordPage() {
       off_calendar = true;
     }
 
-    const payload = {
-      user_id: uid,
-      subject_id: subjectId,
-      topic_id: topicId || null,
-      source_id: sourceId || null,
-      question_count: q,
-      duration_min: d,
-      note,
-      activity_date,
-      off_calendar,
-    };
+    setMsg(undefined);
 
-    const { error } = editId
-      ? await supabase.from('records').update(payload).eq('id', editId)
-      : await supabase.from('records').insert(payload);
+    if (editId) {
+      const { error } = await supabase
+        .from('records')
+        .update({
+          subject_id: subjectId,
+          topic_id: topicId || null,
+          source_id: sourceId || null,
+          question_count: q,
+          duration_min: d,
+          note: note.trim() || null,
+          activity_date,
+          off_calendar,
+        })
+        .eq('id', editId);
 
-    if (error) return setMsg(error.message);
-    router.push('/records');
+      if (error) {
+        setMsg(error.message);
+        return;
+      }
+      setMsg('Kayıt güncellendi.');
+      router.push('/records');
+    } else {
+      const { error } = await supabase.from('records').insert({
+        user_id: uid,
+        subject_id: subjectId,
+        topic_id: topicId || null,
+        source_id: sourceId || null,
+        question_count: q,
+        duration_min: d,
+        note: note.trim() || null,
+        activity_date,
+        off_calendar,
+      });
+
+      if (error) {
+        setMsg(error.message);
+        return;
+      }
+
+      setQuestionCount('');
+      setDurationMin('');
+      setNote('');
+      setTopicId('');
+      setSourceId('');
+      setMsg('Kayıt oluşturuldu.');
+    }
   }
 
-  return (
-    <div className="p-4 max-w-lg mx-auto">
-      <h1 className="text-xl font-semibold mb-4">{editId ? 'Kaydı Düzenle' : 'Yeni Kayıt Ekle'}</h1>
+  const subjectName = useMemo(
+    () => subjects.find((s) => s.id === subjectId)?.name || '',
+    [subjects, subjectId]
+  );
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Ders seçimi */}
-        <div>
-          <label className="block font-medium mb-1">Ders</label>
-          <select
-            className="rounded-lg border p-1"
-            value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}   /* ✅ düzeltme yapıldı */
-            required
-          >
-            <option value="">Ders seçiniz</option>
+  if (loading)
+    return (
+      <main className="px-2 py-5">
+        <p className="text-sm text-gray-600">Yükleniyor…</p>
+      </main>
+    );
+
+  if (!uid) return null;
+
+  return (
+    <main className="py-3 sm:py-5 space-y-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">{editId ? 'Kaydı Düzenle' : 'Çalışma Ekle'}</h1>
+        <div className="flex gap-2">
+          <Link href="/records" className="rounded-lg bg-purple-600 text-white px-3 py-1 text-sm hover:bg-purple-700">
+            Kayıt listesi
+          </Link>
+          <Link href="/kaynaklarim" className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50">
+            Kaynaklarım
+          </Link>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border bg-white p-4 shadow-sm">
+        {/* Ders */}
+        <div className="grid gap-1">
+          <label className="text-sm font-medium">Ders</label>
+          <select className="rounded-lg border p-1" value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required>
+            <option value="">Ders Seçiniz…</option>
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -233,15 +258,11 @@ export default function NewRecordPage() {
           </select>
         </div>
 
-        {/* Konu seçimi */}
-        <div>
-          <label className="block font-medium mb-1">Konu</label>
-          <select
-            className="rounded-lg border p-1"
-            value={topicId}
-            onChange={(e) => setTopicId(e.target.value)}
-          >
-            <option value="">Konu seçiniz</option>
+        {/* Konu */}
+        <div className="grid gap-1">
+          <label className="text-sm font-medium">Konu</label>
+          <select className="rounded-lg border p-1" value={topicId} onChange={(e) => setTopicId(e.target.value)}>
+            <option value="">Konu Seçiniz...</option>
             {topics.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -250,111 +271,92 @@ export default function NewRecordPage() {
           </select>
         </div>
 
-        {/* Kaynak seçimi */}
-        <div>
-          <label className="block font-medium mb-1">Kaynak</label>
-          <select
+        {/* Kaynak */}
+        <div className="grid gap-1">
+          <label className="text-sm font-medium">Kaynak</label>
+          <div className="grid sm:grid-cols-[1fr_auto] gap-2">
+            <select className="rounded-lg border p-1" value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
+              <option value="">Kaynak Seçiniz…</option>
+              {sources.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <input
+                className="rounded-lg border px-2 py-1 text-sm"
+                placeholder={subjectId ? `${subjectName} için yeni kaynak…` : 'Önce Ders Seçiniz...'}
+                value={newSourceName}
+                onChange={(e) => setNewSourceName(e.target.value)}
+                disabled={!uid || !subjectId}
+              />
+              <button
+                type="button"
+                onClick={handleAddSource}
+                disabled={!uid || !subjectId || !newSourceName.trim() || addingSource}
+                className="rounded-lg bg-emerald-600 px-3 text-sm text-white hover:bg-emerald-700 disabled:opacity-70"
+              >
+                {addingSource ? 'Ekleniyor…' : 'Ekle'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Soru Sayısı */}
+        <div className="grid gap-1">
+          <label className="text-sm font-medium">Soru Sayısı</label>
+          <input
             className="rounded-lg border p-1"
-            value={sourceId}
-            onChange={(e) => setSourceId(e.target.value)}
-          >
-            <option value="">Kaynak seçiniz</option>
-            {sources.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Soru sayısı ve süre */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block font-medium mb-1">Soru Sayısı</label>
-            <input
-              type="number"
-              className="w-full border rounded-lg p-1"
-              value={questionCount}
-              onChange={(e) => setQuestionCount(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block font-medium mb-1">Süre (dakika)</label>
-            <input
-              type="number"
-              className="w-full border rounded-lg p-1"
-              value={durationMin}
-              onChange={(e) => setDurationMin(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Not */}
-        <div>
-          <label className="block font-medium mb-1">Not</label>
-          <textarea
-            className="w-full border rounded-lg p-1"
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
+            type="number"
+            inputMode="numeric"
+            placeholder="örn. 35"
+            value={questionCount}
+            onChange={(e) => setQuestionCount(e.target.value)}
+            min={0}
           />
         </div>
 
-        {/* Tarih seçimi */}
-        <div>
-          <label className="block font-medium mb-1">Tarih</label>
-          <div className="flex items-center gap-2">
-            <label>
-              <input
-                type="radio"
-                name="dateMode"
-                value="today"
-                checked={dateMode === 'today'}
-                onChange={() => setDateMode('today')}
-              />{' '}
-              Bugün
+        {/* Tarih */}
+        <div className="grid gap-1">
+          <label className="text-sm font-medium">Tarih</label>
+          <div className="flex flex-wrap items-center gap-x-3">
+            <label className="inline-flex items-center gap-2">
+              <input type="radio" name="dateMode" value="today" checked={dateMode === 'today'} onChange={() => setDateMode('today')} />
+              <span>Bugün ({formatDMYFromISO(todayLocalISODate())})</span>
             </label>
-            <label>
-              <input
-                type="radio"
-                name="dateMode"
-                value="specific"
-                checked={dateMode === 'specific'}
-                onChange={() => setDateMode('specific')}
-              />{' '}
-              Belirli gün
+            <label className="inline-flex items-center gap-2">
+              <input type="radio" name="dateMode" value="specific" checked={dateMode === 'specific'} onChange={() => setDateMode('specific')} />
+              <span>Farklı tarih</span>
             </label>
-            <label>
-              <input
-                type="radio"
-                name="dateMode"
-                value="off"
-                checked={dateMode === 'off'}
-                onChange={() => setDateMode('off')}
-              />{' '}
-              Takvime ekleme
+            <label className="inline-flex items-center gap-2">
+              <input type="radio" name="dateMode" value="off" checked={dateMode === 'off'} onChange={() => setDateMode('off')} />
+              <span>Takvim dışı (Belirsiz Tarih)</span>
             </label>
           </div>
 
           {dateMode === 'specific' && (
-            <input
-              className="mt-2 w-52 rounded-lg border p-1"
-              type="date"
-              value={specificDate}
-              onChange={(e) => setSpecificDate(e.target.value)}
-            />
+            <input className="mt-2 w-52 rounded-lg border p-1" type="date" value={specificDate} onChange={(e) => setSpecificDate(e.target.value)} />
           )}
         </div>
 
-        {msg && <p className="text-red-600">{msg}</p>}
+        {msg && <p className="text-sm text-red-600">{msg}</p>}
 
-        <button
-          type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          {editId ? 'Kaydı Güncelle' : 'Kaydı Kaydet'}
-        </button>
+        <div className="pt-1 flex justify-end">
+          <button type="submit" className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+            {editId ? 'Kaydı Güncelle' : 'Kaydı Kaydet'}
+          </button>
+        </div>
       </form>
-    </div>
+    </main>
+  );
+}
+
+export default function NewRecordPage() {
+  return (
+    <Suspense fallback={<div>Yükleniyor...</div>}>
+      <NewRecordInner />
+    </Suspense>
   );
 }
