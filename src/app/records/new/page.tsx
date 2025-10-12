@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter, useSearchParams } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
+
 // YYYY-MM-DD (yerel saat) döndürür
 function todayLocalISODate(): string {
   const now = new Date();
