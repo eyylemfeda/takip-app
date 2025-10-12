@@ -529,125 +529,98 @@ export default function BooksPage() {
 
       {msg && <p className="text-sm text-red-600">{msg}</p>}
 
-      {/* ===== MOBİL: 2 PANELLİ YATAY KAYDIRMA ===== */}
-      <div className="md:hidden -mx-3 px-1">
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto">
-          {/* Panel 1: Kitaplar */}
-          <div className="min-w-full snap-start space-y-3">
-            {/* Aktif Kitaplar */}
-            <section className="rounded-xl border bg-white shadow-sm">
-              <div className="border-b px-3 py-2 font-semibold">Aktif</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="p-2 text-left">Kapak</th>
-                      <th className="p-2 text-left">Adı</th>
-                      <th className="p-2 text-left">Yazar</th>
-                      <th className="p-2 text-left">İlerleme</th>
-                      <th className="p-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groups.active.map((b) => (
-                      <BookRowItem key={b.id} b={b} />
-                    ))}
-                    {groups.active.length === 0 && (
-                      <tr>
-                        <td className="p-4 text-gray-500" colSpan={5}>
-                          Aktif kitap yok.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {/* Pasif Kitaplar */}
-            <section className="rounded-xl border bg-white shadow-sm">
-              <div className="border-b px-3 py-2 font-semibold">Pasif</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="p-2 text-left">Kapak</th>
-                      <th className="p-2 text-left">Adı</th>
-                      <th className="p-2 text-left">Yazar</th>
-                      <th className="p-2 text-left">İlerleme</th>
-                      <th className="p-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groups.paused.map((b) => (
-                      <BookRowItem key={b.id} b={b} />
-                    ))}
-                    {groups.paused.length === 0 && (
-                      <tr>
-                        <td className="p-4 text-gray-500" colSpan={5}>
-                          Pasif kitap yok.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {/* Biten Kitaplar */}
-            <section className="rounded-xl border bg-white shadow-sm">
-              <div className="border-b px-3 py-2 font-semibold">Biten</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="p-2 text-left">Kapak</th>
-                      <th className="p-2 text-left">Adı</th>
-                      <th className="p-2 text-left">Yazar</th>
-                      <th className="p-2 text-left">İlerleme</th>
-                      <th className="p-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groups.finished.map((b) => (
-                      <BookRowItem key={b.id} b={b} />
-                    ))}
-                    {groups.finished.length === 0 && (
-                      <tr>
-                        <td className="p-4 text-gray-500" colSpan={5}>
-                          Biten kitap yok.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+      {/* ===== MOBİL: Basit Kitap Listesi ===== */}
+      <div className="md:hidden space-y-3">
+        {/* Aktif Kitaplar */}
+        <section className="rounded-xl border bg-white shadow-sm">
+          <div className="border-b px-3 py-2 font-semibold">Aktif</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="p-2 text-left">Kapak</th>
+                  <th className="p-2 text-left">Adı</th>
+                  <th className="p-2 text-left">Yazar</th>
+                  <th className="p-2 text-left">İlerleme</th>
+                  <th className="p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.active.map((b) => (
+                  <BookRowItem key={b.id} b={b} />
+                ))}
+                {groups.active.length === 0 && (
+                  <tr>
+                    <td className="p-4 text-gray-500" colSpan={5}>
+                      Aktif kitap yok.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
+        </section>
 
-          {/* Panel 2: Okuma Kayıtları */}
-          <div className="min-w-full snap-start">
-            <div className="rounded-xl border bg-white p-3 shadow-sm">
-              <div className="mb-2 text-base font-semibold">Okuma Kayıtları</div>
-              <p className="mb-3 text-sm text-gray-600">
-                Tüm güncel okuma kayıtlarını görmek için listeye git.
-              </p>
-              <Link
-                href="/reading-logs"
-                className="inline-flex items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
-              >
-                Kayıtlar listesine git
-              </Link>
-            </div>
+        {/* Pasif Kitaplar */}
+        <section className="rounded-xl border bg-white shadow-sm">
+          <div className="border-b px-3 py-2 font-semibold">Pasif</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="p-2 text-left">Kapak</th>
+                  <th className="p-2 text-left">Adı</th>
+                  <th className="p-2 text-left">Yazar</th>
+                  <th className="p-2 text-left">İlerleme</th>
+                  <th className="p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.paused.map((b) => (
+                  <BookRowItem key={b.id} b={b} />
+                ))}
+                {groups.paused.length === 0 && (
+                  <tr>
+                    <td className="p-4 text-gray-500" colSpan={5}>
+                      Pasif kitap yok.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </section>
 
-        {/* ipucu güncellendi */}
-        <div className="mt-2 flex justify-center gap-2 text-[11px] text-gray-500">
-          <span>◀︎ sola kaydır: kayıtlar</span>
-        </div>
+        {/* Biten Kitaplar */}
+        <section className="rounded-xl border bg-white shadow-sm">
+          <div className="border-b px-3 py-2 font-semibold">Biten</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="p-2 text-left">Kapak</th>
+                  <th className="p-2 text-left">Adı</th>
+                  <th className="p-2 text-left">Yazar</th>
+                  <th className="p-2 text-left">İlerleme</th>
+                  <th className="p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.finished.map((b) => (
+                  <BookRowItem key={b.id} b={b} />
+                ))}
+                {groups.finished.length === 0 && (
+                  <tr>
+                    <td className="p-4 text-gray-500" colSpan={5}>
+                      Biten kitap yok.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
-
 
       {/* ===== DESKTOP ===== */}
       <div className="hidden md:block space-y-2 lg:space-y-4">

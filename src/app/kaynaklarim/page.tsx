@@ -21,6 +21,16 @@ export default function MySourcesPage() {
   // yeni kaynak ekleme
   const [newName, setNewName] = useState('');
   const [newSubjectId, setNewSubjectId] = useState('');
+  const subjectOrder = [
+  'Fen Bilimleri',
+  'Matematik',
+  'Türkçe',
+  'Paragraf',
+  'T.C. İnkılap Tarihi',
+  'Din Kültürü ve Ahlak Bilgisi',
+  'İngilizce',
+];
+
 
   // düzenleme modu
   const [editId, setEditId] = useState<string | null>(null);
@@ -154,129 +164,112 @@ export default function MySourcesPage() {
     <main className="mx-auto max-w-none sm:max-w-3xl px-0 sm:px-4 md:px-6 py-3 sm:py-5 space-y-3 sm:space-y-4">
       <h1 className="text-2xl font-bold px-1 sm:px-0">Kaynaklarım</h1>
 
-      {/* Ekle */}
-      <section className="mx-1 sm:mx-0 rounded-lg sm:rounded-xl border bg-white p-3 sm:p-4 shadow-sm space-y-3">
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-          <input
-            className="rounded border p-2"
-            placeholder="Yeni kaynak adı…"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            disabled={!uid}
-          />
-          <select
-            className="rounded border p-2"
-            value={newSubjectId}
-            onChange={(e) => setNewSubjectId(e.target.value)}
-          >
-            <option value="">Ders seçin…</option>
-            {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <button
-            onClick={addSource}
-            disabled={!uid || !newSubjectId || !newName.trim()}
-            className="rounded bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            Ekle
-          </button>
-        </div>
-        <p className="text-xs text-gray-500">
-          Not: Aynı isim, <b>aynı kullanıcı + aynı derste</b> yalnızca bir kez olabilir.
-        </p>
-      </section>
+      {/* Ekle / Düzenle Formu */}
+    <section className="mx-1 sm:mx-0 rounded-lg sm:rounded-xl border bg-white p-3 sm:p-4 shadow-sm space-y-3">
+      <h2 className="text-lg font-semibold mb-2">
+        {editId ? 'Kaynağı Güncelle' : 'Yeni Kaynak Ekle'}
+      </h2>
 
-      {/* Filtre & Arama */}
-      <section className="mx-1 sm:mx-0 rounded-lg sm:rounded-xl border bg-white p-3 sm:p-4 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <select
-            className="rounded border p-2"
-            value={subjectFilter}
-            onChange={(e) => setSubjectFilter(e.target.value)}
-          >
-            <option value="">Tüm dersler</option>
-            {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <input
-            className="rounded border p-2"
-            placeholder="Ara…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto_auto]">
+        <input
+          className="rounded border p-2"
+          placeholder="Kaynak adı…"
+          value={editId ? editName : newName}
+          onChange={(e) => (editId ? setEditName(e.target.value) : setNewName(e.target.value))}
+          disabled={!uid}
+        />
+
+        <select
+          className="rounded border p-2"
+          value={editId ? editSubjectId : newSubjectId}
+          onChange={(e) =>
+            editId ? setEditSubjectId(e.target.value) : setNewSubjectId(e.target.value)
+          }
+        >
+          <option value="">Ders seçin…</option>
+          {subjects.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Kaydet veya Güncelle */}
+        <button
+          onClick={editId ? saveEdit : addSource}
+          disabled={
+            !uid ||
+            !(editId ? editSubjectId && editName.trim() : newSubjectId && newName.trim())
+          }
+          className="rounded bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {editId ? 'Güncelle' : 'Ekle'}
+        </button>
+
+        {/* Vazgeç butonu (yalnızca düzenleme modunda) */}
+        {editId && (
           <button
-            onClick={load}
-            className="rounded border px-4 py-2 hover:bg-gray-50"
+            onClick={cancelEdit}
+            className="rounded border px-4 py-2 text-gray-600 hover:bg-gray-50"
           >
-            Yenile
+            Vazgeç
           </button>
-        </div>
-      </section>
+        )}
+      </div>
+
+      <p className="text-xs text-gray-500">
+        Not: Düzenlemek istediğiniz kaynak için "Düzenle" butonuna basıp, güncelleme yapmak için bu bölüme dönünüz.
+      </p>
+    </section>
+
 
       {/* Liste */}
-      <section className="mx-1 sm:mx-0 rounded-lg sm:rounded-xl border bg-white p-3 sm:p-4 shadow-sm">
-        {msg && <p className="mb-2 text-sm text-red-600">{msg}</p>}
-        {loading ? (
-          <p className="text-sm text-gray-500">Yükleniyor…</p>
-        ) : filtered.length === 0 ? (
-          <p className="text-sm text-gray-500">Kayıt yok.</p>
-        ) : (
-          <ul className="grid gap-2">
-            {filtered.map(s => {
-              const subjectName = subjects.find(x => x.id === s.subject_id)?.name ?? 'Ders';
+      <section className="mx-1 sm:mx-0 rounded-lg sm:rounded-xl bg-white p-3 sm:p-4 shadow-sm space-y-4">
+        <h2 className="text-xl font-semibold mb-2">Kaynak Listesi</h2>
 
-              return (
-                <li key={s.id} className="rounded-lg border p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  {/* Sol: isim + ders */}
-                  <div className="min-w-0">
-                    {editId === s.id ? (
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          className="rounded border p-2 text-sm"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                        />
-                        <select
-                          className="rounded border p-2 text-sm"
-                          value={editSubjectId}
-                          onChange={(e) => setEditSubjectId(e.target.value)}
+        {subjectOrder.map((subjectName) => {
+          const subject = subjects.find((s) => s.name === subjectName);
+          const subjectSources = filtered
+            .filter((src) => src.subject_id === subject?.id)
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+          return (
+            <div key={subjectName} className="border rounded-xl p-3 sm:p-4">
+              <h3 className="text-lg font-bold mb-2 text-gray-800">{subjectName}</h3>
+
+              {subjectSources.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">
+                  Henüz kaynak kaydı oluşturulmadı.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {subjectSources.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center justify-between border-b border-gray-200 pb-1 last:border-none"
+                    >
+                      <span className="font-medium text-gray-800">{s.name}</span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => startEdit(s)}
+                          className="rounded border px-3 py-1 text-xs sm:text-sm hover:bg-gray-50"
                         >
-                          {subjects.map(ss => <option key={ss.id} value={ss.id}>{ss.name}</option>)}
-                        </select>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="font-medium">{s.name}</div>
-                        <div className="text-xs text-gray-600">{subjectName}</div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Sağ: aksiyonlar */}
-                  <div className="flex items-center gap-2 self-start sm:self-center">
-                    {editId === s.id ? (
-                      <>
-                        <button onClick={saveEdit} className="rounded bg-indigo-600 px-3 py-1 text-white text-sm hover:bg-indigo-700">
-                          Kaydet
-                        </button>
-                        <button onClick={cancelEdit} className="rounded border px-3 py-1 text-sm hover:bg-gray-50">
-                          İptal
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => startEdit(s)} className="rounded border px-3 py-1 text-sm hover:bg-gray-50">
                           Düzenle
                         </button>
-                        <button onClick={() => removeSource(s.id)} className="rounded bg-red-600 px-3 py-1 text-white text-sm hover:bg-red-700">
+                        <button
+                          onClick={() => removeSource(s.id)}
+                          className="rounded bg-red-600 px-3 py-1 text-xs sm:text-sm text-white hover:bg-red-700"
+                        >
                           Sil
                         </button>
-                      </>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </section>
     </main>
   );

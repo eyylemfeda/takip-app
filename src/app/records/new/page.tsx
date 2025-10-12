@@ -1,66 +1,68 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Suspense } from "react";
-
-
-/* ========= Tipler ========= */
-type Subject = { id: string; name: string };
-type Topic   = { id: string; name: string; subject_id: string };
-type Source  = { id: string; name: string; subject_id: string; user_id: string };
-
-/* ========= Yardımcılar ========= */
-// Yerel gün için ISO "YYYY-MM-DD"
+import { useRouter, useSearchParams } from 'next/navigation';
+// YYYY-MM-DD (yerel saat) döndürür
 function todayLocalISODate(): string {
   const now = new Date();
-  const offsetMs = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
-}
-// "YYYY-MM-DD" → "DD.MM.YYYY"
-function formatDMYFromISO(iso: string) {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-');
-  return `${d}.${m}.${y}`;
+  const tz = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - tz * 60_000);
+  return local.toISOString().slice(0, 10);
 }
 
-function NewRecordInner() {
-  // → Ortak kanca: oturum/aktiflik koruması
-  const { uid, loading } = useRequireActiveUser();
-  const searchParams = useSearchParams();
+
+interface Subject {
+  id: string;
+  name: string;
+}
+
+interface Topic {
+  id: string;
+  name: string;
+  subject_id: string;
+}
+
+interface Source {
+  id: string;
+  name: string;
+  subject_id: string;
+  user_id: string;
+}
+
+export default function NewRecordPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const editId = searchParams.get('id');
 
-
-  // form alanları
+  const [uid, setUid] = useState<string | null>(null);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subjectId, setSubjectId] = useState('');
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [topicId, setTopicId] = useState('');
+  const [sources, setSources] = useState<Source[]>([]);
   const [sourceId, setSourceId] = useState('');
   const [questionCount, setQuestionCount] = useState('');
-  const [durationMin, setDurationMin] = useState(''); // gizli kullanıyorsan boş bırak
-  const [note, setNote] = useState(''); // gizli kullanıyorsan boş bırak
-
-  // tarih modu
+  const [durationMin, setDurationMin] = useState('');
+  const [note, setNote] = useState('');
+  const [msg, setMsg] = useState<string | undefined>();
   const [dateMode, setDateMode] = useState<'today' | 'specific' | 'off'>('today');
-  const [specificDate, setSpecificDate] = useState(todayLocalISODate());
-
-  // listeler
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [sources, setSources] = useState<Source[]>([]);
-
-  // yeni kaynak ekleme
-  const [newSourceName, setNewSourceName] = useState('');
+  const [specificDate, setSpecificDate] = useState<string>('');
   const [addingSource, setAddingSource] = useState(false);
+  const [newSourceName, setNewSourceName] = useState('');
 
-  const [msg, setMsg] = useState<string>();
+  // ========= Oturum UID'sini al =========
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.replace('/signin');
+        return;
+      }
+      setUid(session.user.id);
+    });
+  }, [router]);
 
-  /* ========= Dersleri yükle (uid hazır olunca) ========= */
+  // ========= Dersleri yükle =========
   useEffect(() => {
     if (!uid) return;
     (async () => {
@@ -72,7 +74,7 @@ function NewRecordInner() {
     })();
   }, [uid]);
 
-  /* ========= Ders seçimine göre konular & kaynaklar ========= */
+  // ========= Ders seçimine göre konular & kaynaklar =========
   useEffect(() => {
     (async () => {
       if (!uid || !subjectId) {
@@ -82,7 +84,27 @@ function NewRecordInner() {
         setSourceId('');
         return;
       }
-  /* ========= Düzenleme modunda veriyi yükle ========= */
+
+      // Konular
+      const { data: t1 } = await supabase
+        .from('topics')
+        .select('id,name,subject_id')
+        .eq('subject_id', subjectId)
+        .order('name');
+      setTopics((t1 ?? []) as Topic[]);
+
+      // Kaynaklar
+      const { data: s2 } = await supabase
+        .from('sources')
+        .select('id,name,subject_id,user_id')
+        .eq('user_id', uid)
+        .eq('subject_id', subjectId)
+        .order('name');
+      setSources((s2 ?? []) as Source[]);
+    })();
+  }, [uid, subjectId]);
+
+  // ========= Düzenleme modunda veriyi yükle =========
   useEffect(() => {
     if (!uid || !editId) return;
 
@@ -95,13 +117,13 @@ function NewRecordInner() {
 
       if (error || !data) return;
 
-      // Veriyi form alanlarına aktar
       setSubjectId(data.subject_id || '');
       setTopicId(data.topic_id || '');
       setSourceId(data.source_id || '');
       setQuestionCount(data.question_count?.toString() || '');
       setDurationMin(data.duration_min?.toString() || '');
       setNote(data.note || '');
+
       if (data.off_calendar) {
         setDateMode('off');
       } else if (data.activity_date) {
@@ -111,27 +133,7 @@ function NewRecordInner() {
     })();
   }, [uid, editId]);
 
-
-      // Konular (ders bazlı)
-      const { data: t1 } = await supabase
-        .from('topics')
-        .select('id,name,subject_id')
-        .eq('subject_id', subjectId)
-        .order('name');
-      setTopics((t1 ?? []) as Topic[]);
-
-      // Kaynaklar (kullanıcı + ders bazlı)
-      const { data: s2 } = await supabase
-        .from('sources')
-        .select('id,name,subject_id,user_id')
-        .eq('user_id', uid)
-        .eq('subject_id', subjectId)
-        .order('name');
-      setSources((s2 ?? []) as Source[]);
-    })();
-  }, [uid, subjectId]);
-
-  /* ========= Yeni kaynak ekle (kullanıcı + ders özel) ========= */
+  // ========= Yeni kaynak ekle =========
   async function handleAddSource() {
     if (!uid) return alert('Giriş gerekli.');
     if (!subjectId) return alert('Önce ders seçiniz.');
@@ -163,243 +165,171 @@ function NewRecordInner() {
     }
   }
 
-  /* ========= Kayıt oluştur ========= */
+  // ========= Kayıt oluştur =========
   async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
-  if (!uid) return setMsg('Giriş gerekli.');
-  if (!subjectId) return setMsg('Ders seçiniz.');
+    e.preventDefault();
+    if (!uid) return setMsg('Giriş gerekli.');
+    if (!subjectId) return setMsg('Ders seçiniz.');
 
-  const q = questionCount ? Number(questionCount) : null;
-  const d = durationMin ? Number(durationMin) : null;
-  if (q === null && d === null) {
-    return setMsg('En az birini doldurun: Soru sayısı veya Çalışma süresi.');
-  }
-
-  let activity_date: string | null = null;
-  let off_calendar = false;
-  if (dateMode === 'today') {
-    activity_date = todayLocalISODate();
-  } else if (dateMode === 'specific') {
-    activity_date = specificDate || todayLocalISODate();
-  } else {
-    off_calendar = true;
-  }
-
-  setMsg(undefined);
-
-  if (editId) {
-    // 🟡 Düzenleme modu
-    const { error } = await supabase
-      .from('records')
-      .update({
-        subject_id: subjectId,
-        topic_id: topicId || null,
-        source_id: sourceId || null,
-        question_count: q,
-        duration_min: d,
-        note: note?.trim() || null,
-        activity_date,
-        off_calendar,
-      })
-      .eq('id', editId);
-
-    if (error) {
-      setMsg(error.message);
-      return;
+    const q = questionCount ? Number(questionCount) : null;
+    const d = durationMin ? Number(durationMin) : null;
+    if (q === null && d === null) {
+      return setMsg('En az birini doldurun: Soru sayısı veya Çalışma süresi.');
     }
-    setMsg('Kayıt güncellendi.');
-    router.push('/records');
-  } else {
-    // 🟢 Yeni kayıt modu
-    const { error } = await supabase.from('records').insert({
+
+    let activity_date: string | null = null;
+    let off_calendar = false;
+    if (dateMode === 'today') {
+      activity_date = todayLocalISODate();
+    } else if (dateMode === 'specific') {
+      activity_date = specificDate || todayLocalISODate();
+    } else {
+      off_calendar = true;
+    }
+
+    const payload = {
       user_id: uid,
       subject_id: subjectId,
       topic_id: topicId || null,
       source_id: sourceId || null,
       question_count: q,
       duration_min: d,
-      note: note?.trim() || null,
+      note,
       activity_date,
       off_calendar,
-    });
+    };
 
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
+    const { error } = editId
+      ? await supabase.from('records').update(payload).eq('id', editId)
+      : await supabase.from('records').insert(payload);
 
-    setQuestionCount('');
-    setDurationMin('');
-    setNote('');
-    setTopicId('');
-    setSourceId('');
-    setMsg('Kayıt oluşturuldu.');
+    if (error) return setMsg(error.message);
+    router.push('/records');
   }
-}
-
-  const subjectName = useMemo(
-    () => subjects.find(s => s.id === subjectId)?.name ?? '',
-    [subjects, subjectId]
-  );
-
-  // Kanca kontrol aşamasında loader
-  if (loading) {
-    return (
-      <main className="px-2 py-5">
-        <p className="text-sm text-gray-600">Yükleniyor…</p>
-      </main>
-    );
-  }
-  // uid yoksa render etmiyoruz (kanca /login'e yönlendirir)
-  if (!uid) return null;
 
   return (
-    <main className="py-3 sm:py-5 space-y-3 sm:space-y-4">
-      {/* Üst bar: başlık + sağda aksiyonlar */}
-      <div className="mb-3 sm:mb-4 md:mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
-          {editId ? 'Kaydı Düzenle' : 'Çalışma Ekle'}
-        </h1>
+    <div className="p-4 max-w-lg mx-auto">
+      <h1 className="text-xl font-semibold mb-4">{editId ? 'Kaydı Düzenle' : 'Yeni Kayıt Ekle'}</h1>
 
-        <div className="flex items-center gap-2">
-          {/* Kayıt listesi */}
-          <Link
-            href="/records"
-            className="inline-flex items-center justify-center
-                       h-7 w-19
-                       rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700
-                       md:h-auto md:w-auto md:px-4 md:py-2 md:text-sm"
-          >
-            Kayıt listesi
-          </Link>
-
-          {/* Kaynaklarım */}
-          <Link
-            href="/kaynaklarim"
-            className="inline-flex items-center justify-center
-                       h-7 w-21
-                       rounded-lg border text-sm font-medium hover:bg-gray-50
-                       md:h-auto md:w-auto md:px-4 md:py-2 md:text-sm"
-          >
-            Kaynaklarım
-          </Link>
-        </div>
-      </div>
-
-      {/* Form kartı */}
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-3 sm:space-y-4 rounded-lg sm:rounded-xl border bg-white p-1 px-2 sm:p-4 md:p-6 shadow-sm"
-      >
-        {/* Ders */}
-        <div className="grid gap-1">
-          <label className="text-sm font-medium">Ders</label>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Ders seçimi */}
+        <div>
+          <label className="block font-medium mb-1">Ders</label>
           <select
             className="rounded-lg border p-1"
             value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
+            onChange={(e) => setSubjectId(e.target.value)}   /* ✅ düzeltme yapıldı */
             required
           >
-            <option value="">Ders Seçiniz…</option>
-            {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value="">Ders seçiniz</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
           </select>
         </div>
 
-        {/* Konu */}
-        <div className="grid gap-1">
-          <label className="text-sm font-medium">Konu</label>
+        {/* Konu seçimi */}
+        <div>
+          <label className="block font-medium mb-1">Konu</label>
           <select
             className="rounded-lg border p-1"
             value={topicId}
             onChange={(e) => setTopicId(e.target.value)}
           >
-            <option value="">Konu Seçiniz...</option>
-            {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <option value="">Konu seçiniz</option>
+            {topics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
           </select>
         </div>
 
-        {/* Kaynak + hızlı ekle */}
-        <div className="grid gap-1">
-          <label className="text-sm font-medium">Kaynak</label>
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <select
-              className="rounded-lg border p-1"
-              value={sourceId}
-              onChange={(e) => setSourceId(e.target.value)}
-            >
-              <option value="">Kaynak Seçiniz…</option>
-              {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+        {/* Kaynak seçimi */}
+        <div>
+          <label className="block font-medium mb-1">Kaynak</label>
+          <select
+            className="rounded-lg border p-1"
+            value={sourceId}
+            onChange={(e) => setSourceId(e.target.value)}
+          >
+            <option value="">Kaynak seçiniz</option>
+            {sources.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
-            <div className="grid grid-cols-[1fr_auto] gap-2">
-              <input
-                className="h-9 md:h-10 rounded-lg border px-2 py-1 text-sm leading-tight appearance-none"
-                placeholder={subjectId ? `${subjectName} için yeni kaynak…` : 'Önce Ders Seçiniz...'}
-                value={newSourceName}
-                onChange={(e) => setNewSourceName(e.target.value)}
-                disabled={!uid || !subjectId}
-              />
-              <button
-                type="button"
-                onClick={handleAddSource}
-                disabled={!uid || !subjectId || !newSourceName.trim() || addingSource}
-                className="inline-flex h-9 md:h-10 items-center justify-center rounded-lg bg-emerald-600 px-3 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-80"
-              >
-                {addingSource ? 'Ekleniyor…' : 'Ekle'}
-              </button>
-            </div>
+        {/* Soru sayısı ve süre */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block font-medium mb-1">Soru Sayısı</label>
+            <input
+              type="number"
+              className="w-full border rounded-lg p-1"
+              value={questionCount}
+              onChange={(e) => setQuestionCount(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block font-medium mb-1">Süre (dakika)</label>
+            <input
+              type="number"
+              className="w-full border rounded-lg p-1"
+              value={durationMin}
+              onChange={(e) => setDurationMin(e.target.value)}
+            />
           </div>
         </div>
 
-        {/* Soru (Süre gizli ise yalnız bu kalsın) */}
-        <div className="grid gap-1">
-          <label className="text-sm font-medium">Soru Sayısı</label>
-          <input
-            className="rounded-lg border p-1"
-            type="number"
-            inputMode="numeric"
-            placeholder="örn. 35"
-            value={questionCount}
-            onChange={(e) => setQuestionCount(e.target.value)}
-            min={0}
+        {/* Not */}
+        <div>
+          <label className="block font-medium mb-1">Not</label>
+          <textarea
+            className="w-full border rounded-lg p-1"
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
           />
         </div>
 
-        {/* Tarih */}
-        <div className="grid gap-1">
-          <label className="text-sm font-medium">Tarih</label>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0">
-            <label className="inline-flex items-center gap-2">
+        {/* Tarih seçimi */}
+        <div>
+          <label className="block font-medium mb-1">Tarih</label>
+          <div className="flex items-center gap-2">
+            <label>
               <input
                 type="radio"
                 name="dateMode"
                 value="today"
                 checked={dateMode === 'today'}
                 onChange={() => setDateMode('today')}
-              />
-              <span>Bugün ({formatDMYFromISO(todayLocalISODate())})</span>
+              />{' '}
+              Bugün
             </label>
-
-            <label className="inline-flex items-center gap-2">
+            <label>
               <input
                 type="radio"
                 name="dateMode"
                 value="specific"
                 checked={dateMode === 'specific'}
                 onChange={() => setDateMode('specific')}
-              />
-              <span>Farklı tarih</span>
+              />{' '}
+              Belirli gün
             </label>
-
-            <label className="inline-flex items-center gap-2">
+            <label>
               <input
                 type="radio"
                 name="dateMode"
                 value="off"
                 checked={dateMode === 'off'}
                 onChange={() => setDateMode('off')}
-              />
-              <span>Takvim dışı (Belirsiz Tarih)</span>
+              />{' '}
+              Takvime ekleme
             </label>
           </div>
 
@@ -413,29 +343,15 @@ function NewRecordInner() {
           )}
         </div>
 
-        {/* Mesaj */}
-        {msg && <p className="text-sm text-red-600">{msg}</p>}
+        {msg && <p className="text-red-600">{msg}</p>}
 
-        {/* Kaydı Oluştur — sağa dayalı */}
-        <div className="pt-1 flex justify-end">
-          <button
-            type="submit"
-            className="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-          >
-            {editId ? 'Kaydı Güncelle' : 'Kaydı Kaydet'}
-          </button>
-        </div>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          {editId ? 'Kaydı Güncelle' : 'Kaydı Kaydet'}
+        </button>
       </form>
-    </main>
-  );
-}
-
-// ✅ Suspense ile sarmalanmış dış bileşen (asıl export)
-
-export default function NewRecordPage() {
-  return (
-    <Suspense fallback={<div>Yükleniyor...</div>}>
-      <NewRecordInner />
-    </Suspense>
+    </div>
   );
 }

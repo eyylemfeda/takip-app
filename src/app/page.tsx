@@ -536,7 +536,7 @@ export default function Home() {
       </section>
       {/* === ALT BİLGİ / FOOTER === */}
       <footer className="text-center text-xs text-gray-500 mt-4 pb-4">
-        © {new Date().getFullYear()} — Öğrenci Takip Uygulaması <br/><span className="font-medium text-gray-700">Hakan OBALI</span> tarafından geliştirilmiştir.
+        © {new Date().getFullYear()} — <span className="font-medium text-gray-700">derstakibim.com</span> ve Öğrenci Takip Uygulamasının tüm hakları <span className="font-medium text-gray-700">Hakan OBALI</span> 'ya aittir.
       </footer>
     </main>
   );
