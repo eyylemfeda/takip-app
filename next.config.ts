@@ -18,6 +18,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
+  productionBrowserSourceMaps: false,
+  webpack(config) {
+    config.devtool = false
+    return config
+  },
   async headers() {
     return [
       {
