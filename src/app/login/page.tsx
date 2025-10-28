@@ -66,8 +66,15 @@ function LoginInner() {
         return;
       }
 
-            // 4) Tam sayfa yönlendirme
-      router.push(nextUrl);
+      // === 3) ÇÖZÜM BURADA: ===
+      // Yarış durumunu (Heisenbug) engellemek için,
+      // 'router.push' (hızlı yönlendirme) yerine
+      // 'window.location.replace' (tam sayfa yenileme) kullanıyoruz.
+      // Supabase'e oturumu tarayıcıya yazması için 150 milisaniye zaman tanıyoruz.
+
+      await new Promise((r) => setTimeout(r, 150));
+      window.location.replace(nextUrl);
+
     } catch (e: any) {
       setErr(e?.message ?? 'Giriş sırasında bir hata oluştu.');
       setLoading(false);
