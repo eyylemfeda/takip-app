@@ -1,11 +1,8 @@
 import ClientPage from "./ClientPage";
 
-// (STATIK EXPORT AYARLARI – sadece SERVER dosyasında)
-export const dynamic = "force-static";
-export const dynamicParams = false;
-export function generateStaticParams() {
-  return [{ id: "dummy" }];
-}
+// (RUNTIME EXPORT AYARLARI)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // Server sarmalayıcı: client bileşenini render eder
 export default function Page() {
