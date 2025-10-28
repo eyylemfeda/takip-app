@@ -66,16 +66,8 @@ function LoginInner() {
         return;
       }
 
-      // 3) Oturum yazılmasını bekle (kısa süreli döngü)
-      const deadline = Date.now() + 4000;
-      while (Date.now() < deadline) {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) break;
-        await new Promise((r) => setTimeout(r, 120));
-      }
-
-      // 4) Tam sayfa yönlendirme
-      window.location.replace(nextUrl);
+            // 4) Tam sayfa yönlendirme
+      router.push(nextUrl);
     } catch (e: any) {
       setErr(e?.message ?? 'Giriş sırasında bir hata oluştu.');
       setLoading(false);

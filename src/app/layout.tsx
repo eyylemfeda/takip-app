@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Image from "next/image";
 import HeaderBar from "@/components/HeaderBar";
+import AuthListener from "@/components/AuthListener"; // <-- 1. YENİ SATIR (Import)
 
 export const metadata: Metadata = {
   title: "LGS Takip",
@@ -17,16 +18,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Image
             src="/logo.png"
             alt="derstakibim logo"
-            width={152}   // 🔹 %5 küçültüldü (160 → 152)
-            height={38}   // 🔹 orantılı küçültme
+            width={152}
+            height={38}
             className="h-9 w-auto"
             priority
           />
         </div>
 
-
         {/* === ÜST MENÜ (HeaderBar) === */}
         <HeaderBar />
+
+        {/* === OTURUM DİNLEYİCİSİ (GÖRÜNMEZ) === */}
+        <AuthListener /> {/* <-- 2. YENİ SATIR (Kullanım) */}
 
         {/* === SAYFA İÇERİĞİ === */}
         <div className="mx-auto max-w-4xl px-3 sm:p-4">
