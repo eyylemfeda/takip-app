@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/lib/AuthContext';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -84,41 +85,41 @@ const SHORT_LABEL: Record<string, string> = {
 /*                           ANA SAYFA COMPONENT                       */
 /* ================================================================== */
 export default function Home() {
-  // 🔒 Oturum + aktiflik koruması
+// 🔒 Oturum + aktiflik koruması
   //const { uid, loading } = useRequireActiveUser();//
 
   // EKLENECEK KOD BAŞLANGICI
-const [uid, setUid] = useState<string | null>(null);
-const [loading, setLoading] = useState(true); // Sayfa başlangıçta yükleniyor
+//const [uid, setUid] = useState<string | null>(null);
+//const [loading, setLoading] = useState(true); // Sayfa başlangıçta yükleniyor
 
-useEffect(() => {
-  async function getUserSession() {
+//useEffect(() => {
+  //async function getUserSession() {
     // Supabase'in oturumu tarayıcıdan (localStorage)
     // güvenle yüklemesini bekler
-    const { data, error } = await supabase.auth.getUser();
+    //const { data, error } = await supabase.auth.getUser(); 29.10.2025 değişikliği ile yoruma alındı
 
-    if (error) {
-      console.error('Oturum alınırken hata:', error);
-      setLoading(false);
+    //if (error) {
+     // console.error('Oturum alınırken hata:', error);
+      //setLoading(false);
       // Merak etmeyin, AuthListener (Kaptan 1)
       // zaten kullanıcıyı /login'e atacaktır.
-      return;
-    }
+     // return;
+   // }
 
-    if (data.user) {
-      setUid(data.user.id);
-    }
+  //  if (data.user) {
+  //    setUid(data.user.id);
+ //   }
 
     // Oturum kontrolü bitti (isterse 'null' olsun).
     // Artık sayfa yüklenebilir.
-    setLoading(false);
-  }
+  //  setLoading(false);
+  //}
 
   // Bu fonksiyonu sadece sayfa ilk açıldığında bir kez çalıştır
-  getUserSession();
-}, []);
+ // getUserSession();
+//}, []);
 // EKLENECEK KOD BİTİŞİ
-
+  const { uid, loading } = useAuth();
   const [todayRecs, setTodayRecs] = useState<Rec[]>([]);
   const [allRecs, setAllRecs] = useState<Rec[]>([]);
   const [monthBooks, setMonthBooks] = useState<number>(0);
