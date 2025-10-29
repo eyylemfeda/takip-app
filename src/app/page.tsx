@@ -9,7 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList
 } from 'recharts';
 import { QUOTES } from '@/data/quotes';
-import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';
+//import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';//
 
 const RAD = Math.PI / 180;
 function renderPieLabel({
@@ -85,7 +85,39 @@ const SHORT_LABEL: Record<string, string> = {
 /* ================================================================== */
 export default function Home() {
   // 🔒 Oturum + aktiflik koruması
-  const { uid, loading } = useRequireActiveUser();
+  //const { uid, loading } = useRequireActiveUser();//
+
+  // EKLENECEK KOD BAŞLANGICI
+const [uid, setUid] = useState<string | null>(null);
+const [loading, setLoading] = useState(true); // Sayfa başlangıçta yükleniyor
+
+useEffect(() => {
+  async function getUserSession() {
+    // Supabase'in oturumu tarayıcıdan (localStorage)
+    // güvenle yüklemesini bekler
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error) {
+      console.error('Oturum alınırken hata:', error);
+      setLoading(false);
+      // Merak etmeyin, AuthListener (Kaptan 1)
+      // zaten kullanıcıyı /login'e atacaktır.
+      return;
+    }
+
+    if (data.user) {
+      setUid(data.user.id);
+    }
+
+    // Oturum kontrolü bitti (isterse 'null' olsun).
+    // Artık sayfa yüklenebilir.
+    setLoading(false);
+  }
+
+  // Bu fonksiyonu sadece sayfa ilk açıldığında bir kez çalıştır
+  getUserSession();
+}, []);
+// EKLENECEK KOD BİTİŞİ
 
   const [todayRecs, setTodayRecs] = useState<Rec[]>([]);
   const [allRecs, setAllRecs] = useState<Rec[]>([]);
@@ -329,7 +361,7 @@ export default function Home() {
             {yearBooks > monthBooks && `${monthBooks > 0 ? ', ' : ''}Bu yıl: ${yearBooks} kitap okudum`}
           </p>
         </div>
-        <ActiveBooksInline />
+        <ActiveBooksInline uid={uid}/>
       </section>
 
       {/* === GÜNLÜK (liste + pasta) === */}
@@ -545,9 +577,8 @@ export default function Home() {
 
 /* ================================================================== */
 /*           AKTİF KİTAPLAR – tek kart + “Bugün okuduğum” girişi       */
-/* ================================================================== */
-function ActiveBooksInline() {
-  const { uid } = useRequireActiveUser();
+function ActiveBooksInline({ uid }: { uid: string | null }) {
+  // const { uid } = useRequireActiveUser(); // <-- BU SATIRI TAMAMEN SİLİN
   const [rows, setRows] = useState<Book[]>([]);
   const [sumByTitle, setSumByTitle] = useState<Record<string, number>>({});
   const [lastPageByTitle, setLastPageByTitle] = useState<Record<string, number>>({});
