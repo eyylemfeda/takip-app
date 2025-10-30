@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Image from "next/image";
 import HeaderBar from "@/components/HeaderBar";
-import AuthListener from "@/components/AuthListener"; // <-- 1. YENİ SATIR (Import)
+import { AuthProvider } from "@/lib/AuthContext"; // <-- BUNU EKLEDİĞİNİZDEN EMİN OLUN
 
 export const metadata: Metadata = {
   title: "LGS Takip",
@@ -13,28 +13,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="tr">
       <body className="min-h-screen bg-gray-50 antialiased">
-        {/* === ÜST LOGO (HeaderBar'ın da üstünde) === */}
-        <div className="flex justify-center py-2 bg-white border-b border-gray-600">
-          <Image
-            src="/logo.png"
-            alt="derstakibim logo"
-            width={152}
-            height={38}
-            className="h-9 w-auto"
-            priority
-          />
-        </div>
+        <AuthProvider> {/* <-- BUNU EKLEDİĞİNİZDEN EMİN OLUN */}
 
-        {/* === ÜST MENÜ (HeaderBar) === */}
-        <HeaderBar />
+          {/* === ÜST LOGO === */}
+          <div className="flex justify-center py-2 bg-white border-b border-gray-600">
+            {/* ... Image ... */}
+          </div>
 
-        {/* === OTURUM DİNLEYİCİSİ (GÖRÜNMEZ) === */}
-        <AuthListener /> {/* <-- 2. YENİ SATIR (Kullanım) */}
+          {/* === ÜST MENÜ (HeaderBar) === */}
+          <HeaderBar />
 
-        {/* === SAYFA İÇERİĞİ === */}
-        <div className="mx-auto max-w-4xl px-3 sm:p-4">
-          {children}
-        </div>
+          {/* === OTURUM DİNLEYİCİSİ === */}
+          {/* <AuthListener /> */} {/* <-- 2. BU SATIRI DA SİLİN (HATA BURADA) */}
+
+          {/* === SAYFA İÇERİĞİ === */}
+          <div className="mx-auto max-w-4xl px-3 sm:p-4">
+            {children}
+          </div>
+
+        </AuthProvider> {/* <-- BUNU EKLEDİĞİNİZDEN EMİN OLUN */}
       </body>
     </html>
   );
