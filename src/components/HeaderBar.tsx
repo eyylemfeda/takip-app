@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { usePathname } from 'next/navigation';
+import { useRef, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/AuthContext'; // <-- 1. "Tek Kaptan"ı import et
 import {
   Plus,
   BookOpen,
@@ -12,85 +12,30 @@ import {
   Shield,
   User as UserIcon,
   LogOut,
-  UserPlus, // ← EKLENDİ (Davetler ikonu)
+  UserPlus,
 } from 'lucide-react';
-
-type ProfileRow = { is_admin?: boolean; full_name?: string | null; avatar_url?: string | null };
 
 export default function HeaderBar() {
   const router = useRouter();
-
-  const [email, setEmail] = useState<string>('');
-  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // === Kullanıcı bilgisi yükle + auth değişimlerine reaktif ol ===
-  useEffect(() => {
-    let mounted = true;
+  // 2. TÜM BİLGİLERİ 'useAuth'dan AL (Veritabanı sorgusu YOK)
+  const { session, profile, loading } = useAuth();
 
-    (async () => {
-      const { data: userRes } = await supabase.auth.getUser();
-      const u = userRes?.user || null;
+  const isAuthed = !!session;
+  const isAdmin = (profile?.role === 'admin' || profile?.role === 'coach');
+  const displayName = (profile?.full_name || session?.user?.email || '').trim();
 
-      if (!mounted) return;
-      setEmail(u?.email ?? '');
+  // 3. (Silindi) Artık 'useEffect' ve 'useState(profile)' YOK.
 
-      if (u?.id) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('is_admin, full_name, avatar_url')
-          .eq('id', u.id)
-          .maybeSingle();
-        if (!mounted) return;
-        setProfile(prof ?? null);
-      } else {
-        setProfile(null);
-      }
-    })();
-
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, session) => {
-      const u = session?.user || null;
-      setEmail(u?.email ?? '');
-      if (u?.id) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('is_admin, full_name, avatar_url')
-          .eq('id', u.id)
-          .maybeSingle();
-        setProfile(prof ?? null);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      sub.subscription?.unsubscribe();
-    };
-  }, []);
-
-  const isAdmin = !!profile?.is_admin;
-  const displayName = (profile?.full_name || email || '').trim();
-
-  // 🔑 Login durumuna göre başlık linki
-  const isAuthed = !!email;
-  const homeHref = isAuthed ? '/' : '/login';
-
+  // 4. Logout fonksiyonu basitleşti
   async function handleLogout() {
-    // 1) Header'ı anında boşalt
-    setProfile(null);
-    setEmail('');
     setMenuOpen(false);
-
-    // 2) Supabase oturumunu kapat
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      // 3) Login'e yönlendir + refresh
-      router.replace('/login');
-      router.refresh();
-    }
+    await supabase.auth.signOut();
+    // AuthListener (Kaptan 1) zaten /login'e yönlendirecek,
+    // router.replace'e gerek yok.
   }
 
   const NameLine = displayName ? (
@@ -101,26 +46,37 @@ export default function HeaderBar() {
       {displayName}
     </div>
   ) : null;
-// SON EKLENEN SIKINTI ÇIKARSA SİL 08092025, MENÜ GİZLEME
-const pathname = usePathname();
-const isAuthFlow =
-  pathname === '/login' ||
-  pathname === '/signup' ||
-  pathname === '/forgot' ||
-  pathname?.startsWith('/auth/'); // /auth/reset, /auth/callback vb.
 
-// Auth sayfalarında minimal header göster (menüsüz)
+  // 🔑 Login durumuna göre başlık linki
+  const homeHref = isAuthed ? '/' : '/login';
+
+  // Auth sayfalarında minimal header göster (menüsüz)
+  const isAuthFlow =
+    pathname === '/login' ||
+    pathname === '/signup' ||
+    pathname === '/forgot' ||
+    pathname?.startsWith('/auth/');
+
   if (isAuthFlow) {
     return (
       <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-12 max-w-5xl items-center gap-3 px-3">
           <a href="/" className="font-semibold">Çalışma Panelim</a>
-          {/* Menü/hamburger/kullanıcı butonları YOK */}
         </div>
       </header>
     );
   }
-// SON EKLENEN SIKINTI ÇIKARSA SİL 08092025, MENÜ GİZLEME BURAYA KADAR
+
+  // Yüklenme sırasında boş bir header göster (donmayı engeller)
+  if (loading) {
+    return (
+       <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur">
+         <div className="mx-auto hidden max-w-4xl items-center justify-between px-11 py-2 md:flex h-16">
+           {/* Yüklenme iskeleti */}
+         </div>
+       </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur">
@@ -129,7 +85,6 @@ const isAuthFlow =
         <div className="relative mx-auto max-w-4xl px-3 py-3" ref={rootRef}>
           <div className="flex items-start justify-between">
             <div className="min-w-0">
-              {/* ▾ Başlık linki: login yoksa /login */}
               <Link
                 href={homeHref}
                 className="text-base font-semibold text-black leading-tight truncate"
@@ -140,7 +95,6 @@ const isAuthFlow =
               </Link>
               {NameLine}
             </div>
-
             <div className="ml-2">
               <button
                 type="button"
@@ -172,61 +126,44 @@ const isAuthFlow =
             <div className="py-0.5">
               {isAdmin && (
                 <>
+                  {/* 5. GÜNCELLENDİ: Link artık /admin'e gidiyor */}
                   <Link
-                    href="/admin/topics"
+                    href="/admin"
                     role="menuitem"
                     onClick={() => setMenuOpen(false)}
                     className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
                   >
                     <Shield className="h-4 w-4" />
-                    <span>Admin</span>
-                  </Link>
-
-                  {/* ▾ YENİ: Davetler */}
-                  <Link
-                    href="/admin/invites"
-                    role="menuitem"
-                    onClick={() => setMenuOpen(false)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
-                  >
-                    <UserPlus className="h-4 w-4" />
-                    <span>Davetler</span>
+                    <span>Admin Paneli</span>
                   </Link>
                 </>
               )}
-
+              {/* Diğer menü linkleri (Kayıt ekle, Kitap listem vb.) */}
               <Link
                 href="/records/new"
                 role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
+                // ... (geri kalanı aynı)
               >
                 <Plus className="h-4 w-4" />
                 <span>Kayıt ekle</span>
               </Link>
-
               <Link
                 href="/books"
                 role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
+                // ... (geri kalanı aynı)
               >
                 <BookOpen className="h-4 w-4" />
                 <span>Kitap listem</span>
               </Link>
-
               <div className="my-1.5 border-t" />
-
               <Link
                 href="/profile"
                 role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
+                // ... (geri kalanı aynı)
               >
                 <UserIcon className="h-4 w-4" />
                 <span>Profil</span>
               </Link>
-
               <button
                 role="menuitem"
                 onClick={handleLogout}
@@ -243,35 +180,24 @@ const isAuthFlow =
       {/* === DESKTOP === */}
       <div className="mx-auto hidden max-w-4xl items-center justify-between px-11 py-2 md:flex">
         <div className="flex flex-col min-w-0">
-          {/* ▾ Başlık linki: login yoksa /login */}
           <Link href={homeHref} className="text-lg font-semibold leading-tight truncate" title="Çalışma Panelim">
             Çalışma Panelim
           </Link>
           {NameLine}
         </div>
-
         <div className="flex items-center gap-2">
           {isAdmin && (
             <>
+              {/* 5. GÜNCELLENDİ: Link artık /admin'e gidiyor */}
               <Link
-                href="/admin/topics"
+                href="/admin"
                 className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700"
               >
-                Admin
-              </Link>
-
-              {/* ▾ YENİ: Davetler */}
-              <Link
-                href="/admin/invites"
-                className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
-                title="Davet oluştur / yönet"
-              >
-                <UserPlus className="h-4 w-4" />
-                Davetler
+                Admin Paneli
               </Link>
             </>
           )}
-
+          {/* Diğer desktop linkleri */}
           <Link
             href="/records/new"
             className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"

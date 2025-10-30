@@ -38,8 +38,8 @@ function toISODate(d: Date): string {
 /* ============================================== */
 export default function AdminReportsPage() {
   // 1. OTURUM VE YETKİ KONTROLÜ
-  const { uid, loading: authLoading } = useAuth(); // Merkezi oturum bilgisi
-  const [role, setRole] = useState<string | null>(null);
+  const { uid, profile, loading: authLoading } = useAuth(); // 1. Buradan 'profile' alınır
+  const role = profile?.role; // 2. 'role' profilden çıkarılır
 
   // 2. FİLTRE DURUMLARI (STATE)
   const [students, setStudents] = useState<Profile[]>([]);
@@ -52,39 +52,34 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState(false); // Rapor verisi için
   const [error, setError] = useState<string | null>(null);
 
-  // Sayfa yüklendiğinde Admin yetkisini ve Öğrenci listesini çek
-  useEffect(() => {
-    if (authLoading) return; // Oturum yüklenene kadar bekle
-    if (!uid) return; // Giriş yapılmamışsa (AuthContext zaten yönlendirir)
+    // Sayfa yüklendiğinde SADECE Öğrenci listesini çek
+    useEffect(() => {
+      if (authLoading) return; // Oturum ve rol yüklenene kadar bekle
+      if (!uid) return; // Giriş yapılmamışsa
 
-    (async () => {
-      // 3.1: Kullanıcının rolünü kontrol et
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', uid)
-        .single();
-
-      if (profileError || !['admin', 'coach'].includes(profile?.role ?? '')) {
+      // 2. Yetki kontrolünü burada yap (artık 'role'ü biliyoruz)
+      if (!['admin', 'coach'].includes(role ?? '')) {
         setError('Bu sayfaya erişim yetkiniz yok.');
         return;
       }
-      setRole(profile?.role ?? null); // Yetki tamam
 
-      // 3.2: Filtre için tüm öğrencileri çek
-      const { data: studentList, error: studentsError } = await supabase
-        .from('profiles')
-        .select('id, full_name, role')
-        .in('role', ['student', 'coach']) // Sadece öğrencileri ve koçları listele
-        .order('full_name');
+      // 3. (Eski 3.2) Filtre için tüm öğrencileri çek
+      (async () => {
+        const { data: studentList, error: studentsError } = await supabase
+          .from('profiles')
+          .select('id, full_name, role')
+          .in('role', ['student', 'coach'])
+          .order('full_name');
 
-      if (studentsError) {
-        setError(studentsError.message);
-      } else {
-        setStudents(studentList ?? []);
-      }
-    })();
-  }, [uid, authLoading]);
+        if (studentsError) {
+          setError(studentsError.message);
+        } else {
+          setStudents(studentList ?? []);
+        }
+      })();
+
+    // 4. 'role'ü bağımlılıklara ekle
+    }, [uid, authLoading, role]);
 
   // "RAPOR GETİR" BUTONUNA BASILDIĞINDA
   async function handleFetchReport() {
