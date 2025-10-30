@@ -12,76 +12,70 @@ type Profile = {
   avatar_url: string | null;
 };
 
-// Context'in tipini güncelledik
+// Context'in tipini (Bu değişmedi)
 type AuthContextType = {
   session: Session | null;
   uid: string | null;
-  profile: Profile | null; // <-- 'role', 'full_name' vb. hepsi burada
+  profile: Profile | null;
   loading: boolean;
 };
 
-// Context'i oluşturuyoruz
 const AuthContext = createContext<AuthContextType>({
   session: null,
   uid: null,
-  profile: null, // <-- Güncellendi
+  profile: null,
   loading: true,
 });
 
-// Provider bileşenini güncelliyoruz
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [uid, setUid] = useState<string | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null); // <-- Güncellendi
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true); // Yüklenme durumu
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    // 1. Sayfa ilk yüklendiğinde mevcut oturumu KONTROL ET
+    // 1. SADECE SAYFA İLK YÜKLENDİĞİNDE çalışır
+    // (Login sonrası 'window.location.replace'  bunu tetikler)
     async function getInitialSession() {
+      // Önce oturumu al
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
       if (session) {
-        setSession(session);
-        setUid(session.user.id);
-        // Oturum varsa, profili de al (role, full_name, avatar_url)
+        // Oturum varsa, profili de al
         const { data: profile } = await supabase
           .from('profiles')
           .select('role, full_name, avatar_url')
           .eq('id', session.user.id)
           .single();
+
+        setSession(session);
+        setUid(session.user.id);
         setProfile(profile);
       }
-      setLoading(false); // İlk kontrol bitti
+
+      // Her durumda (oturum olsa da olmasa da) yükleme bitti.
+      setLoading(false);
     }
 
     getInitialSession();
 
-    // 2. Oturumdaki DEĞİŞİKLİKLERİ dinle
+    // 2. SADECE ÇIKIŞ YAPMAYI (SIGNED_OUT) dinle
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        setLoading(true);
-        setSession(newSession);
-        setUid(newSession?.user?.id ?? null);
+      (event, newSession) => {
+        // 'SIGNED_IN' (Giriş) olayını dinlemiyoruz,
+        // çünkü o 'yarış durumu' yaratıyordu.
 
-        if (event === 'SIGNED_IN' && newSession) {
-          // Kullanıcı GİRİŞ YAPTI, profilini al
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role, full_name, avatar_url')
-            .eq('id', newSession.user.id)
-            .single();
-          setProfile(profile);
-
-        } else if (event === 'SIGNED_OUT') {
-          // Kullanıcı ÇIKIŞ YAPTI, profili temizle
+        if (event === 'SIGNED_OUT') {
+          console.log('Oturum koptu, girişe yönlendiriliyor...');
+          setSession(null);
+          setUid(null);
           setProfile(null);
           if (pathname !== '/login') {
             router.push('/login');
           }
         }
-        setLoading(false);
       }
     );
 
@@ -89,15 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [router, pathname]);
+  }, [router, pathname]); // Bu useEffect sadece 1 kez çalışır
 
-  // Context'in değerini oluştur
-  const value = {
-    session,
-    uid,
-    profile, // <-- Güncellendi
-    loading,
-  };
+  const value = { session, uid, profile, loading };
 
   return (
     <AuthContext.Provider value={value}>
@@ -106,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Hook'umuz (useAuth) artık tüm profil bilgilerini döndürecek
+// Hook'umuz (useAuth) değişmedi
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
