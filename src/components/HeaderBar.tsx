@@ -13,6 +13,7 @@ import {
   User as UserIcon,
   LogOut,
   UserPlus,
+  BarChart2
 } from 'lucide-react';
 
 export default function HeaderBar() {
@@ -139,6 +140,17 @@ export default function HeaderBar() {
                 </>
               )}
               {/* Diğer menü linkleri (Kayıt ekle, Kitap listem vb.) */}
+              {/* 3. YENİ LİNK (Sadece admin DEĞİLSE göster) */}
+              {!isAdmin && (
+                <Link
+                  href="/reports"
+                  className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+                  title="Çalışma Raporum"
+                >
+                  <BarChart2 className="h-4 w-4" />
+                  Raporlarım
+                </Link>
+              )}
               <Link
                 href="/records/new"
                 role="menuitem"
