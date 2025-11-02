@@ -127,7 +127,7 @@ export default function HeaderBar() {
             <div className="py-0.5">
               {isAdmin && (
                 <>
-                  {/* 5. GÜNCELLENDİ: Link artık /admin'e gidiyor */}
+                  {/* Admin Paneli */}
                   <Link
                     href="/admin"
                     role="menuitem"
@@ -139,8 +139,8 @@ export default function HeaderBar() {
                   </Link>
                 </>
               )}
-              {/* Diğer menü linkleri (Kayıt ekle, Kitap listem vb.) */}
-              {/* 2. YENİ LİNK (Giriş yapmış VE admin DEĞİLSE göster) */}
+
+              {/* Raporlarım */}
               {isAuthed && !isAdmin && (
                 <Link
                   href="/reports"
@@ -152,31 +152,43 @@ export default function HeaderBar() {
                   <span>Raporlarım</span>
                 </Link>
               )}
+
+              {/* Kayıt ekle (DÜZELTİLDİ) */}
               <Link
                 href="/records/new"
                 role="menuitem"
-                // ... (geri kalanı aynı)
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
               >
                 <Plus className="h-4 w-4" />
                 <span>Kayıt ekle</span>
               </Link>
+
+              {/* Kitap listem (DÜZELTİLDİ) */}
               <Link
                 href="/books"
                 role="menuitem"
-                // ... (geri kalanı aynı)
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
               >
                 <BookOpen className="h-4 w-4" />
                 <span>Kitap listem</span>
               </Link>
+
               <div className="my-1.5 border-t" />
+
+              {/* Profil (DÜZELTİLDİ) */}
               <Link
                 href="/profile"
                 role="menuitem"
-                // ... (geri kalanı aynı)
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
               >
                 <UserIcon className="h-4 w-4" />
                 <span>Profil</span>
               </Link>
+
+              {/* Çıkış (Bu zaten doğruydu) */}
               <button
                 role="menuitem"
                 onClick={handleLogout}
@@ -210,6 +222,19 @@ export default function HeaderBar() {
               </Link>
             </>
           )}
+
+          {/* 3. EKSİK LİNK BURAYA EKLENDİ (Giriş yapmış VE admin DEĞİLSE göster) */}
+          {isAuthed && !isAdmin && (
+            <Link
+              href="/reports"
+              className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+              title="Çalışma Raporum"
+            >
+              <BarChart2 className="h-4 w-4" />
+              Raporlarım
+            </Link>
+          )}
+
           {/* Diğer desktop linkleri */}
           <Link
             href="/records/new"
