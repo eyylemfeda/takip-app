@@ -140,15 +140,16 @@ export default function HeaderBar() {
                 </>
               )}
               {/* Diğer menü linkleri (Kayıt ekle, Kitap listem vb.) */}
-              {/* 3. YENİ LİNK (Sadece admin DEĞİLSE göster) */}
-              {!isAdmin && (
+              {/* 2. YENİ LİNK (Giriş yapmış VE admin DEĞİLSE göster) */}
+              {isAuthed && !isAdmin && (
                 <Link
                   href="/reports"
-                  className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
-                  title="Çalışma Raporum"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
                 >
                   <BarChart2 className="h-4 w-4" />
-                  Raporlarım
+                  <span>Raporlarım</span>
                 </Link>
               )}
               <Link
