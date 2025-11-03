@@ -116,10 +116,10 @@ export default function AdminReportsPage() {
   }, [uid, authLoading, role]);
 
 
-  // === YENİ KOD BLOĞU ===
-  // Seçili Ders değiştiğinde Konu ve Kaynakları filtrele
+  // === GÜNCELLENMİŞ KOD BLOĞU ===
+  // Seçili Ders VEYA Seçili Öğrenci değiştiğinde Konu ve Kaynakları filtrele
   useEffect(() => {
-    // "Tüm Dersler" seçilirse veya hiçbir şey seçilmezse listeleri boşalt
+    // "Tüm Dersler" seçilirse listeleri boşalt
     if (selectedSubject === 'all') {
       setTopics([]);
       setSources([]);
@@ -128,23 +128,34 @@ export default function AdminReportsPage() {
       return;
     }
 
-    // Seçilen derse ait konuları çek
+    // --- Konuları Çek ---
+    // (Konuların öğrenciye özel olmadığını, derse özel olduğunu varsayıyoruz)
     supabase
       .from('topics')
       .select('id, name')
-      .eq('subject_id', selectedSubject) // 'topics' tablosunda 'subject_id' olduğunu varsayıyoruz
+      .eq('subject_id', selectedSubject)
       .order('name')
       .then(({ data }) => setTopics(data ?? []));
 
-    // Seçilen derse ait kaynakları çek
-    supabase
+    // --- Kaynakları Çek (DİNAMİK SORGULAMA) ---
+    // 1. Temel sorguyu başlat (Derse göre filtrele)
+    let sourcesQuery = supabase
       .from('sources')
       .select('id, name')
-      .eq('subject_id', selectedSubject) // 'sources' tablosunda 'subject_id' olduğunu biliyoruz
-      .order('name')
-      .then(({ data }) => setSources(data ?? []));
+      .eq('subject_id', selectedSubject);
 
-  }, [selectedSubject]); // Bu efekt "selectedSubject" her değiştiğinde çalışır
+    // 2. YENİ KONTROL: Eğer "Tüm Öğrenciler" DEĞİL, spesifik bir öğrenci seçiliyse...
+    if (selectedStudent !== 'all') {
+      // Sorguya 'user_id' filtresini de ekle
+      sourcesQuery = sourcesQuery.eq('user_id', selectedStudent);
+    }
+
+    // 3. Sorguyu çalıştır
+    sourcesQuery.order('name').then(({ data }) => {
+      setSources(data ?? []);
+    });
+
+  }, [selectedSubject, selectedStudent]); // Artık 'selectedStudent' değişikliğini de dinliyor
   // "RAPOR GETİR" BUTONUNA BASILDIĞINDA
   async function handleFetchReport() {
     setError(null);

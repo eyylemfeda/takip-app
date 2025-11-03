@@ -92,11 +92,11 @@ export default function StudentReportPage() {
     })();
   }, [uid, authLoading]);
 
-  // === YENİ KOD BLOĞU ===
+  // === GÜNCELLENMİŞ KOD BLOĞU ===
   // Seçili Ders değiştiğinde Konu ve Kaynakları filtrele
   useEffect(() => {
-    // "Tüm Dersler" seçilirse veya hiçbir şey seçilmezse listeleri boşalt
-    if (selectedSubject === 'all') {
+    // uid yüklenmediyse veya Ders seçilmediyse listeleri boşalt
+    if (!uid || selectedSubject === 'all') {
       setTopics([]);
       setSources([]);
       setSelectedTopic('all');
@@ -104,23 +104,25 @@ export default function StudentReportPage() {
       return;
     }
 
-    // Seçilen derse ait konuları çek
+    // --- Konuları Çek ---
     supabase
       .from('topics')
       .select('id, name')
-      .eq('subject_id', selectedSubject) // 'topics' tablosunda 'subject_id' olduğunu varsayıyoruz
+      .eq('subject_id', selectedSubject)
       .order('name')
       .then(({ data }) => setTopics(data ?? []));
 
-    // Seçilen derse ait kaynakları çek
+    // --- Kaynakları Çek ---
+    // (Bu sorgu, hem seçili derse hem de giriş yapan öğrenciye göre filtreler)
     supabase
       .from('sources')
       .select('id, name')
-      .eq('subject_id', selectedSubject) // 'sources' tablosunda 'subject_id' olduğunu biliyoruz
+      .eq('subject_id', selectedSubject)
+      .eq('user_id', uid) // YENİ: Sadece bu öğrencinin kaynakları
       .order('name')
       .then(({ data }) => setSources(data ?? []));
 
-  }, [selectedSubject]); // Bu efekt "selectedSubject" her değiştiğinde çalışır
+  }, [selectedSubject, uid]); // Artık 'uid' değişikliğini de dinliyor
 
   // "RAPOR GETİR" BUTONUNA BASILDIĞINDA (GÜNCELLENDİ)
   async function handleFetchReport() {
