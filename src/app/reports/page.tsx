@@ -60,8 +60,8 @@ export default function StudentReportPage() {
 
   // 2. FİLTRE VERİLERİ (Dropdown'ları doldurmak için)
   const [subjects, setSubjects] = useState<SelectOption[]>([]);
-  const [topics, setTopics] = useState<SelectOption[]>([]);
-  const [sources, setSources] = useState<SelectOption[]>([]);
+  const [topics, setTopics] = useState<SelectOption[]>([]); // Boş dizi olarak başla
+  const [sources, setSources] = useState<SelectOption[]>([]); // Boş dizi olarak başla
 
   // 3. SEÇİLİ FİLTRELER (Öğrenci filtresi kaldırıldı)
   const [selectedSubject, setSelectedSubject] = useState('all');
@@ -89,12 +89,38 @@ export default function StudentReportPage() {
     (async () => {
       supabase.from('subjects').select('id, name').order('name')
         .then(({ data }) => setSubjects(data ?? []));
-      supabase.from('topics').select('id, name').order('name')
-        .then(({ data }) => setTopics(data ?? []));
-      supabase.from('sources').select('id, name').order('name')
-        .then(({ data }) => setSources(data ?? []));
     })();
   }, [uid, authLoading]);
+
+  // === YENİ KOD BLOĞU ===
+  // Seçili Ders değiştiğinde Konu ve Kaynakları filtrele
+  useEffect(() => {
+    // "Tüm Dersler" seçilirse veya hiçbir şey seçilmezse listeleri boşalt
+    if (selectedSubject === 'all') {
+      setTopics([]);
+      setSources([]);
+      setSelectedTopic('all');
+      setSelectedSource('all');
+      return;
+    }
+
+    // Seçilen derse ait konuları çek
+    supabase
+      .from('topics')
+      .select('id, name')
+      .eq('subject_id', selectedSubject) // 'topics' tablosunda 'subject_id' olduğunu varsayıyoruz
+      .order('name')
+      .then(({ data }) => setTopics(data ?? []));
+
+    // Seçilen derse ait kaynakları çek
+    supabase
+      .from('sources')
+      .select('id, name')
+      .eq('subject_id', selectedSubject) // 'sources' tablosunda 'subject_id' olduğunu biliyoruz
+      .order('name')
+      .then(({ data }) => setSources(data ?? []));
+
+  }, [selectedSubject]); // Bu efekt "selectedSubject" her değiştiğinde çalışır
 
   // "RAPOR GETİR" BUTONUNA BASILDIĞINDA (GÜNCELLENDİ)
   async function handleFetchReport() {

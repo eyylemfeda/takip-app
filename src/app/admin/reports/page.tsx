@@ -69,8 +69,8 @@ export default function AdminReportsPage() {
   // 2. FİLTRE VERİLERİ (Dropdown'ları doldurmak için)
   const [students, setStudents] = useState<Profile[]>([]);
   const [subjects, setSubjects] = useState<SelectOption[]>([]);
-  const [topics, setTopics] = useState<SelectOption[]>([]);
-  const [sources, setSources] = useState<SelectOption[]>([]);
+  const [topics, setTopics] = useState<SelectOption[]>([]); // Boş dizi olarak başla
+  const [sources, setSources] = useState<SelectOption[]>([]); // Boş dizi olarak başla
 
   // 3. SEÇİLİ FİLTRELER
   const [selectedStudent, setSelectedStudent] = useState('all');
@@ -112,16 +112,39 @@ export default function AdminReportsPage() {
       supabase.from('subjects').select('id, name').order('name')
         .then(({ data }) => setSubjects(data ?? []));
 
-      // Konular
-      supabase.from('topics').select('id, name').order('name')
-        .then(({ data }) => setTopics(data ?? []));
-
-      // Kaynaklar
-      supabase.from('sources').select('id, name').order('name')
-        .then(({ data }) => setSources(data ?? []));
     })();
   }, [uid, authLoading, role]);
 
+
+  // === YENİ KOD BLOĞU ===
+  // Seçili Ders değiştiğinde Konu ve Kaynakları filtrele
+  useEffect(() => {
+    // "Tüm Dersler" seçilirse veya hiçbir şey seçilmezse listeleri boşalt
+    if (selectedSubject === 'all') {
+      setTopics([]);
+      setSources([]);
+      setSelectedTopic('all');
+      setSelectedSource('all');
+      return;
+    }
+
+    // Seçilen derse ait konuları çek
+    supabase
+      .from('topics')
+      .select('id, name')
+      .eq('subject_id', selectedSubject) // 'topics' tablosunda 'subject_id' olduğunu varsayıyoruz
+      .order('name')
+      .then(({ data }) => setTopics(data ?? []));
+
+    // Seçilen derse ait kaynakları çek
+    supabase
+      .from('sources')
+      .select('id, name')
+      .eq('subject_id', selectedSubject) // 'sources' tablosunda 'subject_id' olduğunu biliyoruz
+      .order('name')
+      .then(({ data }) => setSources(data ?? []));
+
+  }, [selectedSubject]); // Bu efekt "selectedSubject" her değiştiğinde çalışır
   // "RAPOR GETİR" BUTONUNA BASILDIĞINDA
   async function handleFetchReport() {
     setError(null);
