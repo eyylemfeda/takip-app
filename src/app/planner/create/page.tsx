@@ -107,7 +107,7 @@ export default function CreatePlannerPage() {
   const nextStep = () => setStep(prev => prev + 1);
   const prevStep = () => setStep(prev => prev - 1);
 
-  // SON ADIM: VERİYİ GÖNDERME
+  // SON ADIM: VERİYİ GÖNDERME (TOKEN DÜZELTMESİ YAPILDI)
   const finishWizard = async () => {
     // 1. Token Kontrolü
     if (!session?.access_token) {
@@ -125,6 +125,7 @@ export default function CreatePlannerPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // İŞTE BU SATIR EKSİKTİ VEYA HATALIYDI:
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ formData }),

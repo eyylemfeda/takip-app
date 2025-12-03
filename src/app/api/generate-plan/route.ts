@@ -10,6 +10,7 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 
 // "14:30" -> 870 (dakika) çevirici
 function timeToMin(time: string): number {
+  if (!time) return 0;
   const [h, m] = time.split(':').map(Number);
   return h * 60 + m;
 }
@@ -19,11 +20,6 @@ function minToTime(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-}
-
-// Çakışma Kontrolü
-function isOverlap(start1: number, end1: number, start2: number, end2: number) {
-  return Math.max(start1, start2) < Math.min(end1, end2);
 }
 
 type Block = {
@@ -40,17 +36,24 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { formData } = body;
 
+    // 1. GÜVENLİK: Token Kontrolü
     const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+        return NextResponse.json({ error: 'Oturum anahtarı (Token) eksik.' }, { status: 401 });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader! } },
+      global: { headers: { Authorization: authHeader } },
     });
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: 'Oturum açılmamış.' }, { status: 401 });
+      console.error("Auth Hatası:", authError);
+      return NextResponse.json({ error: 'Oturum açılmamış veya süresi dolmuş.' }, { status: 401 });
     }
 
     // --- ADIM 1: ALGORİTMİK İSKELET OLUŞTURMA ---
+    // (Yapay zeka yerine Matematiği kullanıyoruz)
 
     const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
     const scheduleSkeleton: { day: string; blocks: Block[] }[] = [];
@@ -58,27 +61,23 @@ export async function POST(req: NextRequest) {
     // Tempo Ayrıştırma (40+10 -> 40, 10)
     let studyDur = 40;
     let breakDur = 10;
-    if (formData.studyTempo.includes('+')) {
+    if (formData.studyTempo && formData.studyTempo.includes('+')) {
       const p = formData.studyTempo.split('+');
       studyDur = parseInt(p[0]);
       breakDur = parseInt(p[1]);
     }
 
-    // Sabah Başlangıç ve Gece Bitiş (Dakika cinsinden)
-    // Hafta içi okul varsa sabah başlangıcı okul öncesi değilse 09:00 gibi varsayımlar yerine
-    // kullanıcının girdiği 'morningStart' (eğer sabah istiyorsa) veya okul çıkışını baz alacağız.
-    // Ancak en güvenlisi: Sabah 06:00'dan Gece Bitişe kadar taramak.
-    const dayStartMin = 6 * 60; // 06:00
+    // Gece Bitiş (Dakika cinsinden)
     const dayEndMin = timeToMin(formData.workEndTime);
 
     // Kullanıcı Tanımlı Blokları (Dolu Zamanlar) Hazırla
     const userBlocks = [
-        ...formData.privateLessons,
-        ...formData.socialActivities,
-        ...formData.breaks
+        ...(formData.privateLessons || []),
+        ...(formData.socialActivities || []),
+        ...(formData.breaks || [])
     ].map((b: any) => ({ ...b, startMin: timeToMin(b.start), endMin: timeToMin(b.end) }));
 
-    let totalLessonSlots = 0; // Toplam kaç tane boş ders kutusu açtık?
+    let totalLessonSlots = 0;
 
     // Her gün için döngü
     for (const day of DAYS) {
@@ -108,7 +107,7 @@ export async function POST(req: NextRequest) {
       }
 
       // C. BİLSEM
-      if (formData.goesToBilsem && formData.bilsemDays.includes(day)) {
+      if (formData.goesToBilsem && formData.bilsemDays && formData.bilsemDays.includes(day)) {
           dailyBlocks.push({ start: formData.bilsemStart, end: formData.bilsemEnd, activity: 'BİLSEM', type: 'bilsem', startMin: timeToMin(formData.bilsemStart), endMin: timeToMin(formData.bilsemEnd) });
       }
 
@@ -118,7 +117,7 @@ export async function POST(req: NextRequest) {
           dailyBlocks.push({ start: b.start, end: b.end, activity: b.name, type: b.type || 'activity', startMin: b.startMin, endMin: b.endMin });
       });
 
-      // E. Kitap Okuma (Gece Bitişten Önceki 30dk) - Eğer istenmişse
+      // E. Kitap Okuma (Gece Bitişten Önceki 30dk)
       if (formData.readBookBeforeSleep) {
           const bookStart = dayEndMin - 30;
           dailyBlocks.push({ start: minToTime(bookStart), end: minToTime(dayEndMin), activity: 'Kitap Okuma', type: 'activity', startMin: bookStart, endMin: dayEndMin });
@@ -127,47 +126,41 @@ export async function POST(req: NextRequest) {
       // Blokları saate göre sırala
       dailyBlocks.sort((a, b) => a.startMin - b.startMin);
 
-      // 2. BOŞLUKLARI BUL VE DOLDUR (MATEMATİK MOTORU)
+      // 2. BOŞLUKLARI BUL VE DOLDUR
       const finalBlocks: Block[] = [];
-      let currentTime = dayStartMin;
 
-      // Sabah Erken Çalışma Kontrolü
-      if (formData.wantsMorningStudy && formData.morningDays.includes(day)) {
-          currentTime = timeToMin(formData.morningStart); // Sabah buradan başla
+      // Başlangıç Saati Belirleme
+      let currentTime = 6 * 60; // Varsayılan 06:00
+      if (formData.wantsMorningStudy && formData.morningDays && formData.morningDays.includes(day)) {
+          currentTime = timeToMin(formData.morningStart);
       } else {
-          // Eğer sabah çalışması yoksa ve okul varsa, okul çıkışına kadar atla?
-          // Hayır, 09:00'dan başlatalım, dolu bloklar zaten atlanacak.
-          // Ama pratik olsun diye: Hafta içi okul başlangıcına kadar uyuyor varsayabiliriz.
-          // En güvenlisi: currentTime'ı bir önceki bloğun bitişine göre ilerletmek.
-          // Başlangıç: Sabah 08:00 (veya okul başlangıcı)
-          if (!isWeekend) currentTime = timeToMin(formData.schoolStartTime); // Okul sabahı
-          else currentTime = 9 * 60; // Hafta sonu 09:00
+          // Sabah çalışması yoksa, hafta içi okuldan sonra başla, hafta sonu 09:00
+          if (!isWeekend) currentTime = timeToMin(formData.schoolEndTime);
+          else currentTime = 9 * 60;
       }
 
       // Mevcut dolu blokların aralarını doldur
       for (const block of dailyBlocks) {
         // Eğer şimdiki zaman ile bir sonraki dolu blok arasında boşluk varsa
         if (currentTime < block.startMin) {
-            // Boşluk süresi
             let gap = block.startMin - currentTime;
 
             // Bu boşluğa kaç ders sığar?
             while (gap >= studyDur) {
-                // DERS EKLE (İsimsiz - AI dolduracak)
+                // DERS EKLE
                 finalBlocks.push({
                     start: minToTime(currentTime),
                     end: minToTime(currentTime + studyDur),
-                    activity: 'AI_FILL_ME', // <--- İŞTE BURASI!
+                    activity: 'AI_FILL_ME', // <-- Yapay Zeka burayı dolduracak
                     type: 'lesson',
                     startMin: currentTime,
                     endMin: currentTime + studyDur
                 });
                 totalLessonSlots++;
-
                 currentTime += studyDur;
                 gap -= studyDur;
 
-                // MOLA EKLE (Eğer hala yer varsa ve bir sonraki blok hemen başlamıyorsa)
+                // MOLA EKLE
                 if (gap >= breakDur) {
                     finalBlocks.push({
                         start: minToTime(currentTime),
@@ -183,12 +176,12 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Dolu bloğu ekle
+        // Dolu bloğu listeye ekle ve zamanı güncelle
         finalBlocks.push(block);
         currentTime = Math.max(currentTime, block.endMin);
       }
 
-      // Günün sonundaki (son dolu bloktan gece bitişe kadar olan) boşluğu doldur
+      // Gün sonu boşluğunu doldur
       if (currentTime < dayEndMin) {
           let gap = dayEndMin - currentTime;
            while (gap >= studyDur) {
@@ -219,63 +212,69 @@ export async function POST(req: NextRequest) {
             }
       }
 
-      // Sıralama ve Ekleme
       finalBlocks.sort((a, b) => a.startMin - b.startMin);
       scheduleSkeleton.push({ day, blocks: finalBlocks });
     }
 
-    // --- ADIM 2: YAPAY ZEKAYA SADECE "BOŞLUKLARI DOLDUR" DEMEK ---
-    // 'generationConfig' ekleyerek çıktı limitini (maxOutputTokens) artırıyoruz.
-    // 8192 token, çok detaylı bir haftalık plan için yeterli olacaktır.
+    // --- ADIM 2: YAPAY ZEKADAN DERSLERİ İSTEME ---
+
+    // 'gemini-pro' kullanıyoruz (en kararlı)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-pro',
-      generationConfig: {
-        // gemini-pro için güvenli token limiti genelde 2048'dir,
-        // ama biz yine de yüksek tutalım, hata verirse düşürürüz.
-        maxOutputTokens: 2048,
-        temperature: 0.7,
-      }
+        model: 'gemini-pro',
+        generationConfig: {
+            maxOutputTokens: 4096,
+            temperature: 0.7,
+        }
     });
 
     const prompt = `
-      Sen LGS Koçusun. Aşağıda bir öğrencinin haftalık programının İSKELETİ var.
-      Bazı kutular "AI_FILL_ME" olarak işaretli. Senin görevin SADECE bu kutulara hangi dersin gelmesi gerektiğini belirlemek.
+      Sen bir LGS Koçusun. Aşağıda bir öğrencinin haftalık programının İSKELETİ var.
+      Bazı kutular "AI_FILL_ME" olarak işaretli. Senin görevin SADECE bu kutulara ders isimlerini yerleştirmek.
 
       ÖĞRENCİ PROFİLİ:
       - Hedef: ${formData.targetType === 'school' ? formData.targetSchoolName : formData.targetScore}
-      - Zayıf Dersler: ${formData.difficultSubjects.join(', ')}
-      - Ders Sıklıkları: ${Object.entries(formData.subjectFrequencies).map(([k, v]) => `${k}: ${v}`).join(', ')}
+      - Zayıf Dersler: ${formData.difficultSubjects?.join(', ')}
+      - Ders Sıklıkları: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v}`).join(', ')}
 
       KURALLAR:
       1. Her günün İLK "AI_FILL_ME" kutusuna MUTLAKA "Paragraf" yaz.
       2. Zayıf derslere öncelik ver.
       3. Sayısal ve Sözel dersleri ardışık bloklarda değiştir (Mat -> Türkçe -> Fen gibi) ki zihin yorulmasın.
-      4. Sadece ders adını yaz (Örn: "Matematik", "Fen Bilimleri"). Ekstra açıklama yapma.
-      5. "AI_FILL_ME" olmayan kutulara (Okul, Yemek vb.) DOKUNMA, aynen bırak.
+      4. Sadece ders adını yaz (Örn: "Matematik", "Fen Bilimleri").
+      5. "AI_FILL_ME" olmayan kutulara (Okul, Yemek, Mola vb.) DOKUNMA, aynen bırak.
+      6. Haftanın son çalışma bloğuna "Haftalık Tekrar" yaz.
 
       AYRICA:
-      - "target_analysis" objesi içinde okul hedefini analiz et (Zorluk, Puan).
-      - "expert_advice" alanına motive edici, 3 paragraflık koçluk yazısı yaz.
+      - "target_analysis": Hedef okulu analiz et.
+      - "expert_advice": Öğrenciye samimi, babacan ve profesyonel bir dille (3 paragraf) tavsiyeler ver.
 
       PROGRAM İSKELETİ (JSON):
       ${JSON.stringify(scheduleSkeleton)}
 
-      ÇIKTI FORMATI:
-      Yukarıdaki JSON'ın aynısını, sadece "AI_FILL_ME" yerlerine ders isimleri yazılmış halde ve başına analiz/tavsiye eklenmiş halde döndür.
+      ÇIKTI FORMATI (Sadece JSON):
       {
          "target_analysis": { ... },
          "expert_advice": "...",
-         "schedule": [ ... ]
+         "schedule": [ ... (iskeletin aynısı, sadece AI_FILL_ME'ler değişmiş hali) ]
       }
     `;
 
+    console.log("AI İsteği gönderiliyor...");
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text();
+
+    // JSON Temizlik
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) text = text.substring(firstBrace, lastBrace + 1);
+
     const generatedData = JSON.parse(text);
 
     // --- ADIM 3: KAYDETME ---
+    console.log("Veritabanına kaydediliyor...");
+
     await supabase.from('study_plans').update({ is_active: false }).eq('user_id', user.id);
 
     const { data: insertData, error: insertError } = await supabase
@@ -285,7 +284,7 @@ export async function POST(req: NextRequest) {
         is_active: true,
         target_details: { ...generatedData.target_analysis, user_input: formData.targetSchoolName || formData.targetScore },
         student_profile: formData,
-        weekly_schedule: generatedData // AI'nın doldurduğu hali
+        weekly_schedule: generatedData
       })
       .select().single();
 
@@ -294,7 +293,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, planId: insertData.id });
 
   } catch (error: any) {
-    console.error('Plan hatası:', error);
-    return NextResponse.json({ error: 'Hata oluştu.', details: error.message }, { status: 500 });
+    console.error('GENEL API HATASI:', error);
+    return NextResponse.json({ error: 'Sunucu hatası.', details: error.message }, { status: 500 });
   }
 }
