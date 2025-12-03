@@ -4,16 +4,10 @@ import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/lib/AuthContext'; // <-- 1. "Tek Kaptan"ı import et
+import { useAuth } from '@/lib/AuthContext';
 import {
-  Plus,
-  BookOpen,
-  Menu as MenuIcon,
-  Shield,
-  User as UserIcon,
-  LogOut,
-  UserPlus,
-  BarChart2
+  Plus, BookOpen, Menu as MenuIcon, Shield,
+  User as UserIcon, LogOut, UserPlus, BarChart2, Calendar // Calendar eklendi
 } from 'lucide-react';
 
 export default function HeaderBar() {
@@ -22,36 +16,25 @@ export default function HeaderBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // 2. TÜM BİLGİLERİ 'useAuth'dan AL (Veritabanı sorgusu YOK)
   const { session, profile, loading } = useAuth();
 
   const isAuthed = !!session;
   const isAdmin = (profile?.role === 'admin' || profile?.role === 'coach');
   const displayName = (profile?.full_name || session?.user?.email || '').trim();
 
-  // 3. (Silindi) Artık 'useEffect' ve 'useState(profile)' YOK.
-
-  // 4. Logout fonksiyonu basitleşti
   async function handleLogout() {
     setMenuOpen(false);
     await supabase.auth.signOut();
-    // AuthListener (Kaptan 1) zaten /login'e yönlendirecek,
-    // router.replace'e gerek yok.
   }
 
   const NameLine = displayName ? (
-    <div
-      className="text-sm text-gray-600 italic mt-0.5 truncate"
-      title={displayName}
-    >
+    <div className="text-sm text-gray-600 italic mt-0.5 truncate" title={displayName}>
       {displayName}
     </div>
   ) : null;
 
-  // 🔑 Login durumuna göre başlık linki
   const homeHref = isAuthed ? '/' : '/login';
 
-  // Auth sayfalarında minimal header göster (menüsüz)
   const isAuthFlow =
     pathname === '/login' ||
     pathname === '/signup' ||
@@ -68,13 +51,10 @@ export default function HeaderBar() {
     );
   }
 
-  // Yüklenme sırasında boş bir header göster (donmayı engeller)
   if (loading) {
     return (
        <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur">
-         <div className="mx-auto hidden max-w-4xl items-center justify-between px-11 py-2 md:flex h-16">
-           {/* Yüklenme iskeleti */}
-         </div>
+         <div className="mx-auto hidden max-w-4xl items-center justify-between px-11 py-2 md:flex h-16"></div>
        </header>
     );
   }
@@ -127,7 +107,6 @@ export default function HeaderBar() {
             <div className="py-0.5">
               {isAdmin && (
                 <>
-                  {/* Admin Paneli */}
                   <Link
                     href="/admin"
                     role="menuitem"
@@ -140,7 +119,19 @@ export default function HeaderBar() {
                 </>
               )}
 
-              {/* Raporlarım */}
+              {/* YENİ: Çalışma Programım (Mobilde herkes görür) */}
+              {isAuthed && (
+                 <Link
+                  href="/planner"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
+                >
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                  <span>Programım</span>
+                </Link>
+              )}
+
               {isAuthed && !isAdmin && (
                 <Link
                   href="/reports"
@@ -153,7 +144,6 @@ export default function HeaderBar() {
                 </Link>
               )}
 
-              {/* Kayıt ekle (DÜZELTİLDİ) */}
               <Link
                 href="/records/new"
                 role="menuitem"
@@ -164,7 +154,6 @@ export default function HeaderBar() {
                 <span>Kayıt ekle</span>
               </Link>
 
-              {/* Kitap listem (DÜZELTİLDİ) */}
               <Link
                 href="/books"
                 role="menuitem"
@@ -177,7 +166,6 @@ export default function HeaderBar() {
 
               <div className="my-1.5 border-t" />
 
-              {/* Profil (DÜZELTİLDİ) */}
               <Link
                 href="/profile"
                 role="menuitem"
@@ -188,7 +176,6 @@ export default function HeaderBar() {
                 <span>Profil</span>
               </Link>
 
-              {/* Çıkış (Bu zaten doğruydu) */}
               <button
                 role="menuitem"
                 onClick={handleLogout}
@@ -213,7 +200,6 @@ export default function HeaderBar() {
         <div className="flex items-center gap-2">
           {isAdmin && (
             <>
-              {/* 5. GÜNCELLENDİ: Link artık /admin'e gidiyor */}
               <Link
                 href="/admin"
                 className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700"
@@ -223,11 +209,22 @@ export default function HeaderBar() {
             </>
           )}
 
-          {/* 3. EKSİK LİNK BURAYA EKLENDİ (Giriş yapmış VE admin DEĞİLSE göster) */}
+          {/* YENİ: Çalışma Programım (İki satır destekli buton) */}
+          {isAuthed && (
+            <Link
+              href="/planner"
+              className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-100 px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-100 leading-tight text-center h-[38px]"
+              title="Haftalık Çalışma Programım"
+            >
+              <Calendar className="h-4 w-4 shrink-0" />
+              <span>Çalışma<br/>Programım</span>
+            </Link>
+          )}
+
           {isAuthed && !isAdmin && (
             <Link
               href="/reports"
-              className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+              className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 h-[38px]"
               title="Çalışma Raporum"
             >
               <BarChart2 className="h-4 w-4" />
@@ -235,30 +232,29 @@ export default function HeaderBar() {
             </Link>
           )}
 
-          {/* Diğer desktop linkleri */}
           <Link
             href="/records/new"
-            className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 h-[38px]"
           >
             <Plus className="h-4 w-4" />
             Kayıt Ekle
           </Link>
           <Link
             href="/books"
-            className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
+            className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 h-[38px]"
           >
             <BookOpen className="h-4 w-4" />
             Kitap Listem
           </Link>
           <Link
             href="/profile"
-            className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 h-[38px] flex items-center"
           >
             Profil
           </Link>
           <button
             onClick={handleLogout}
-            className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 h-[38px]"
           >
             Çıkış
           </button>
