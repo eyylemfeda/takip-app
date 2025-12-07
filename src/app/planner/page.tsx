@@ -79,36 +79,39 @@ export default function PlannerPage() {
     if (!error) { setPlan(null); router.refresh(); }
   };
 
-  /* ======================================================== */
-  /* PDF İNDİRME FONKSİYONU                                   */
+ /* ======================================================== */
+  /* PDF İNDİRME FONKSİYONU (GÜNCELLENMİŞ - BUG FİXLİ)        */
   /* ======================================================== */
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
     setIsDownloading(true);
 
-    try {
-      const element = printRef.current;
+    const element = printRef.current;
+    // Mevcut stili yedeğe alıyoruz
+    const originalStyle = element.style.cssText;
 
-      // 1. Görünümü PDF için optimize et
-      const originalStyle = element.style.cssText;
+    try {
+      // 1. GÖRÜNÜMÜ ZORLA (PDF İÇİN)
+      // Bu işlem kullanıcı mobildeyken anlık olarak genişliği artırır
+      // ki PDF'te günler yan yana çıksın.
       element.style.width = '1400px';
       element.style.padding = '20px';
-      // Arkaplanı kesinlikle beyaz HEX kodu yapıyoruz (oklch hatasını önlemek için)
       element.style.backgroundColor = '#ffffff';
       element.style.color = '#000000';
 
-      // 2. Yüksek kalitede ekran görüntüsü al
+      // 2. FOTOĞRAFINI ÇEK
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff', // Arkaplanı zorla beyaz yap
-        logging: false
+        backgroundColor: '#ffffff',
+        logging: false,
+        // Mobilde kaydırma çubuğu oluşmasını engellemek için scroll ayarları
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 1400
       });
 
-      // 3. Stili eski haline getir
-      element.style.cssText = originalStyle;
-
-      // 4. PDF Oluştur
+      // 3. PDF OLUŞTUR
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('l', 'mm', 'a4');
 
@@ -137,8 +140,12 @@ export default function PlannerPage() {
 
     } catch (error) {
       console.error('PDF Hatası:', error);
-      alert('PDF oluşturulurken bir hata oluştu. Lütfen sayfayı yenileyip tekrar deneyin.');
+      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
     } finally {
+      // --- KRİTİK DÜZELTME ---
+      // Hata olsa da olmasa da stili MUTLAKA eski haline getir.
+      // Bu sayede mobilde genişlik asılı kalmaz.
+      element.style.cssText = originalStyle;
       setIsDownloading(false);
     }
   };
