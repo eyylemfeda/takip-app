@@ -9,7 +9,6 @@ import {
   Target, School, Coffee, Trophy, Percent, Download, Loader2
 } from 'lucide-react';
 import Link from 'next/link';
-// PDF Kütüphaneleri
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -51,7 +50,6 @@ export default function PlannerPage() {
   const [loading, setLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // PDF için içeriği kapsayan referans
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -79,39 +77,35 @@ export default function PlannerPage() {
     if (!error) { setPlan(null); router.refresh(); }
   };
 
- /* ======================================================== */
-  /* PDF İNDİRME FONKSİYONU (GÜNCELLENMİŞ - BUG FİXLİ)        */
+  /* ======================================================== */
+  /* PDF İNDİRME FONKSİYONU (RENK HATASI FİXLENDİ)            */
   /* ======================================================== */
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
     setIsDownloading(true);
 
     const element = printRef.current;
-    // Mevcut stili yedeğe alıyoruz
+    // Orijinal stili yedeğe al
     const originalStyle = element.style.cssText;
 
     try {
-      // 1. GÖRÜNÜMÜ ZORLA (PDF İÇİN)
-      // Bu işlem kullanıcı mobildeyken anlık olarak genişliği artırır
-      // ki PDF'te günler yan yana çıksın.
+      // 1. Görünümü PDF için zorla (A4 Yatay sığması için genişlik veriyoruz)
       element.style.width = '1400px';
       element.style.padding = '20px';
       element.style.backgroundColor = '#ffffff';
-      element.style.color = '#000000';
 
-      // 2. FOTOĞRAFINI ÇEK
+      // 2. Fotoğrafı Çek
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff',
+        backgroundColor: '#ffffff', // Arkaplanı kesin beyaz yap
         logging: false,
-        // Mobilde kaydırma çubuğu oluşmasını engellemek için scroll ayarları
         scrollX: 0,
         scrollY: 0,
         windowWidth: 1400
       });
 
-      // 3. PDF OLUŞTUR
+      // 3. PDF Oluştur
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('l', 'mm', 'a4');
 
@@ -124,6 +118,7 @@ export default function PlannerPage() {
       let finalHeight = imgHeight;
       let finalWidth = pdfWidth;
 
+      // Sayfaya sığmazsa küçült
       if (imgHeight > pdfHeight) {
           const ratio = pdfHeight / imgHeight;
           finalHeight = pdfHeight - 10;
@@ -140,11 +135,9 @@ export default function PlannerPage() {
 
     } catch (error) {
       console.error('PDF Hatası:', error);
-      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+      alert('PDF oluşturulurken bir hata oluştu. Tarayıcı önbelleğini temizlemeyi deneyin.');
     } finally {
-      // --- KRİTİK DÜZELTME ---
-      // Hata olsa da olmasa da stili MUTLAKA eski haline getir.
-      // Bu sayede mobilde genişlik asılı kalmaz.
+      // 4. Stili MUTLAKA eski haline getir (Mobilde bozulmasın diye)
       element.style.cssText = originalStyle;
       setIsDownloading(false);
     }
@@ -199,7 +192,7 @@ export default function PlannerPage() {
   return (
     <main className="space-y-6 pb-10">
 
-      {/* ÜST BAR: Başlık ve Butonlar */}
+      {/* ÜST BAR */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Calendar className="text-blue-600" /> Haftalık Planım
@@ -213,7 +206,6 @@ export default function PlannerPage() {
                 {isDownloading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
                 {isDownloading ? 'Hazırlanıyor...' : 'PDF İndir (A4)'}
             </button>
-
             <Link href="/planner/create" className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors flex items-center justify-center">
                 Yenile
             </Link>
@@ -224,17 +216,18 @@ export default function PlannerPage() {
       </div>
 
       {/* --- YAZDIRILACAK ALAN BAŞLANGICI --- */}
-      {/* NOT: Burada 'bg-blue-50' gibi classlar yerine style={{backgroundColor: '#...'}} kullanıyoruz.
-         Bunun sebebi 'oklch' renk hatasını önlemektir. */}
+      {/* ÖNEMLİ: Burada 'oklch' renk hatasını önlemek için Tailwind renk classlarını (bg-blue-50 vb.) KULLANMIYORUZ.
+          Hepsi style={{ backgroundColor: '#HEX' }} şeklinde manuel veriliyor. */}
       <div ref={printRef} className="space-y-6 p-4 rounded-xl" style={{ backgroundColor: '#f9fafb' }}>
 
-          {/* 1. HEDEF BİLGİSİ (KOMPAKT) */}
+          {/* 1. HEDEF BİLGİSİ */}
           {target && (
-            <div className="p-5 rounded-xl shadow-sm border border-gray-200" style={{ backgroundColor: '#ffffff' }}>
+            <div className="p-5 rounded-xl shadow-sm border" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
+                          style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}> {/* bg-blue-100, text-blue-700 */}
                         <Target size={10} /> HEDEFİM
                     </span>
                     </div>
@@ -243,14 +236,16 @@ export default function PlannerPage() {
                     </h1>
                     <div className="flex items-center gap-3 mt-2 text-sm">
                     {target.score && (
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded border" style={{ backgroundColor: '#ffedd5', borderColor: '#fed7aa', color: '#374151' }}>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded border"
+                             style={{ backgroundColor: '#ffedd5', borderColor: '#fed7aa', color: '#374151' }}> {/* bg-orange-50 */}
                             <Trophy size={14} style={{ color: '#ea580c' }} />
                             <span className="font-bold">{target.score}</span>
                             <span className="text-[10px] uppercase font-semibold" style={{ color: '#6b7280' }}>Puan</span>
                         </div>
                     )}
                     {target.percentile && (
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded border" style={{ backgroundColor: '#eff6ff', borderColor: '#dbeafe', color: '#374151' }}>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded border"
+                             style={{ backgroundColor: '#eff6ff', borderColor: '#dbeafe', color: '#374151' }}> {/* bg-blue-50 */}
                             <Percent size={14} style={{ color: '#2563eb' }} />
                             <span className="font-bold">%{target.percentile}</span>
                             <span className="text-[10px] uppercase font-semibold" style={{ color: '#6b7280' }}>Dilim</span>
@@ -259,7 +254,8 @@ export default function PlannerPage() {
                     </div>
                 </div>
                 {target.motivation && (
-                    <div className="p-3 rounded-lg max-w-md" style={{ backgroundColor: '#eef2ff', border: '1px solid #e0e7ff' }}>
+                    <div className="p-3 rounded-lg max-w-md"
+                         style={{ backgroundColor: '#eef2ff', border: '1px solid #e0e7ff' }}> {/* bg-indigo-50 */}
                         <p className="text-sm italic font-medium leading-relaxed" style={{ color: '#312e81' }}>
                             "{target.motivation}"
                         </p>
@@ -269,9 +265,10 @@ export default function PlannerPage() {
             </div>
           )}
 
-          {/* 2. UZMAN GÖRÜŞÜ (KOMPAKT) */}
+          {/* 2. UZMAN GÖRÜŞÜ */}
           {advice && (
-            <div className="p-4 rounded-xl shadow-sm" style={{ backgroundColor: '#ffffff', borderLeft: '4px solid #6366f1' }}>
+            <div className="p-4 rounded-xl shadow-sm"
+                 style={{ backgroundColor: '#ffffff', borderLeft: '4px solid #6366f1' }}>
               <div className="flex items-start gap-3">
                 <div className="p-1.5 rounded-full mt-0.5" style={{ backgroundColor: '#e0e7ff', color: '#4f46e5' }}>
                   <Quote size={16} />
@@ -289,40 +286,47 @@ export default function PlannerPage() {
           {/* 3. PROGRAM GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             {scheduleList.map((dayPlan, idx) => (
-              <div key={idx} className="rounded-lg shadow-sm border overflow-hidden flex flex-col" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
-                <div className="p-2 border-b font-bold text-center uppercase tracking-wide text-xs" style={{ backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', color: '#374151' }}>
+              <div key={idx} className="rounded-lg shadow-sm border overflow-hidden flex flex-col"
+                   style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
+                <div className="p-2 border-b font-bold text-center uppercase tracking-wide text-xs"
+                     style={{ backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', color: '#374151' }}>
                     {dayPlan.day}
                 </div>
                 <div className="p-2 space-y-1 flex-1">
                   {dayPlan.blocks.length === 0 ? <p className="text-center text-xs py-2" style={{ color: '#9ca3af' }}>-</p> : dayPlan.blocks.map((block, bIdx) => {
 
                     const isBreak = block.type === 'break';
-                    let boxStyle = {};
+                    let boxStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px' };
                     let displayActivity = block.activity;
 
+                    // NOT: Renkleri Tailwind class'ı ile değil, HEX kodu ile veriyoruz.
+                    // oklch hatasını önlemek için bu şart.
                     if (isBreak) {
-                        // Mola Stili (Yeşilimsi)
-                        boxStyle = { backgroundColor: '#f0fdf4', color: '#15803d', justifyContent: 'center', border: 'none', fontSize: '10px' };
+                        // Mola (Yeşilimsi)
+                        boxStyle = { ...boxStyle, backgroundColor: '#f0fdf4', color: '#15803d', justifyContent: 'center', border: 'none', fontSize: '10px' };
                         displayActivity = getDurationText(block.start, block.end);
                     } else if (block.type === 'lesson') {
-                        // Ders Stili (Mavi)
-                        boxStyle = { backgroundColor: '#eff6ff', color: '#1e3a8a', borderColor: '#dbeafe', borderStyle: 'solid', borderWidth: '1px', fontWeight: '600' };
+                        // Ders (Mavi)
+                        boxStyle = { ...boxStyle, backgroundColor: '#eff6ff', color: '#1e3a8a', borderColor: '#dbeafe', borderStyle: 'solid', borderWidth: '1px', fontWeight: '600' };
                     }
                     else if (block.type === 'school') {
                         // Okul (Turuncu)
-                        boxStyle = { backgroundColor: '#fff7ed', color: '#9a3412', borderColor: '#ffedd5', borderStyle: 'solid', borderWidth: '1px' };
+                        boxStyle = { ...boxStyle, backgroundColor: '#fff7ed', color: '#9a3412', borderColor: '#ffedd5', borderStyle: 'solid', borderWidth: '1px' };
                     }
                     else if (block.type === 'course' || block.type === 'bilsem') {
                         // Kurs (Mor)
-                        boxStyle = { backgroundColor: '#faf5ff', color: '#6b21a8', borderColor: '#f3e8ff', borderStyle: 'solid', borderWidth: '1px' };
+                        boxStyle = { ...boxStyle, backgroundColor: '#faf5ff', color: '#6b21a8', borderColor: '#f3e8ff', borderStyle: 'solid', borderWidth: '1px' };
                     }
                     else if (block.type === 'activity') {
                         // Aktivite (Pembe)
-                        boxStyle = { backgroundColor: '#fdf2f8', color: '#9d174d', borderColor: '#fce7f3', borderStyle: 'solid', borderWidth: '1px' };
+                        boxStyle = { ...boxStyle, backgroundColor: '#fdf2f8', color: '#9d174d', borderColor: '#fce7f3', borderStyle: 'solid', borderWidth: '1px' };
+                    } else {
+                        // Varsayılan (Gri)
+                        boxStyle = { ...boxStyle, backgroundColor: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb' };
                     }
 
                     return (
-                      <div key={bIdx} className={`px-2 py-1.5 rounded text-xs flex gap-2 items-center ${isBreak ? 'py-0.5 min-h-[20px]' : ''}`} style={boxStyle}>
+                      <div key={bIdx} className={`px-2 py-1.5 rounded text-xs ${isBreak ? 'py-0.5 min-h-[20px]' : ''}`} style={boxStyle}>
                         <div className={`flex-1 ${isBreak ? 'text-center' : ''}`}>
                           <div className="leading-tight">{displayActivity}</div>
                           {!isBreak && <div className="text-[9px] font-medium" style={{ opacity: 0.7 }}>{block.start}-{block.end}</div>}
