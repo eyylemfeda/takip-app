@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     const { formData } = body;
 
     // 1. API KEY KONTROLÜ
+    // (NEXT_PUBLIC veya normal, hangisi varsa onu alır)
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -153,46 +154,45 @@ export async function POST(req: NextRequest) {
         if (validModel) selectedModel = validModel.name;
     }
 
-    // --- YENİ KATI PROMPT: SAYISAL/SÖZEL DENGESİ + ÖĞRENCİ TERCİHLERİ ---
+    // --- PROMPT (BLOK DERS ZORUNLULUĞU GETİRİLDİ) ---
     const prompt = `
-      Sen çok disiplinli ve stratejik bir LGS Koçusun.
-      GÖREV: Aşağıdaki ders programını kurallara %100 uyarak doldur.
+      Sen çok disiplinli bir LGS Koçusun.
+      GÖREV: Aşağıdaki ders programını SIKI KURALLARA uyarak doldur.
 
       DERS KATEGORİLERİ:
       - SAYISAL: Matematik, Fen Bilimleri
       - SÖZEL: Türkçe, T.C. İnkılap, İngilizce, Din Kültürü
 
-      ÖĞRENCİ BİLGİLERİ (ÇOK ÖNEMLİ):
+      ÖĞRENCİ BİLGİLERİ:
       - Hedef: "${formData.targetSchoolName || formData.targetScore}"
-      - AĞIRLIK VERİLECEK DERSLER (ÖNCELİK): ${formData.difficultSubjects?.join(', ')} (Bu dersleri diğerlerine göre daha fazla yerleştir).
-      - MİNİMUM DERS SIKLIKLARI: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v} kez`).join(', ')} (Her ders için belirtilen sayı, o dersin haftada EN AZ kaç gün çalışılacağını gösterir. Bu sayının altına düşme).
+      - AĞIRLIKLI DERSLER: ${formData.difficultSubjects?.join(', ')}
+      - SIKLIKLAR: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v} kez`).join(', ')}
 
       HEDEF OKUL ANALİZİ:
       1. Okul Adı: Verilen okul adını kullan.
       2. Puan & Yüzdelik: Yukarıdaki verileri kullan.
       3. Hitap: "Merhaba Sevgili Öğrenci" diye başla. Okul adıyla hitap etme.
 
-      PROGRAM YERLEŞTİRME KURALLARI:
+      YERLEŞTİRME KURALLARI (BU KURALLAR KANUNDUR, ASLA BOZMA):
 
-      KURAL 1: SABİT BAŞLANGIÇ
-      - Her günün 1. dersi MUTLAKA "Paragraf Soru Çözümü" olacak.
-      - Her günün 2. dersi MUTLAKA "Matematik" olacak.
+      KURAL 1: SABİT BAŞLANGIÇ (HER GÜN)
+      - Günün 1. dersi (AI_FILL_ME) => "Paragraf Soru Çözümü"
+      - Günün 2. dersi (AI_FILL_ME) => "Matematik"
+      (Bu sıra asla değişmez).
 
-      KURAL 2: ZİG-ZAG YÖNTEMİ (SAYISAL - SÖZEL DENGESİ)
-      - Asla iki sayısal dersi (Mat, Fen) peş peşe koyma.
-      - Asla iki sözel dersi (Türkçe, İnkılap, İng, Din) peş peşe koyma.
-      - Örnek: Paragraf -> Mat -> Türkçe -> Fen -> İnkılap...
+      KURAL 2: BLOK DERS ZORUNLULUĞU (HAFTA İÇİ)
+      - Hafta içi günlerde aynı dersten 2 tane vereceksen, bunları MUTLAKA YAN YANA koy.
+      - Asla dersleri dağıtma!
+      - DOĞRU: Mat, Mat, Fen, Fen, Türkçe.
+      - YANLIŞ: Mat, Fen, Mat, Fen, Türkçe. (BUNU YAPMA!)
 
-      KURAL 3: GÜNLÜK DENGE
-      - Her gün mutlaka hem Sayısal hem Sözel ders olacak.
+      KURAL 3: ZİG-ZAG (BLOKLAR ARASI)
+      - Sayısal bir bloktan sonra Sözel bir blok gelmeli.
+      - Örnek: [Paragraf] -> [Mat, Mat] -> [Türkçe] -> [Fen, Fen]
 
-      KURAL 4: MATEMATİK YOĞUNLUĞU
-      - Zaten her gün 1 saat matematik (2. derste) var.
-      - Eğer "Matematik" yukarıda ağırlık verilecek derslerdeyse veya haftalık sıklığı yüksekse, günün ilerleyen saatlerine 2. bir Matematik dersi daha koy.
-
-      KURAL 5: ÖĞRENCİ TERCİHLERİ
-      - Öğrencinin "Ağırlık Verilecek Dersler" listesindeki dersleri programda diğerlerinden daha fazla gör.
-      - "Minimum Ders Sıklıkları"na mutlaka uy.
+      KURAL 4: ÖĞRENCİ TERCİHLERİ
+      - Öğrencinin ağırlık verilmesini istediği dersleri daha çok kullan.
+      - Haftalık sıklık sayılarına tam olarak uy.
 
       ÇIKTI (JSON):
       {
