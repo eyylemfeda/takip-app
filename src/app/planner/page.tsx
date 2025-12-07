@@ -89,42 +89,41 @@ export default function PlannerPage() {
     try {
       const element = printRef.current;
 
-      // 1. Görünümü PDF için optimize et (Genişlik zorla ki günler yan yana olsun)
+      // 1. Görünümü PDF için optimize et
       const originalStyle = element.style.cssText;
-      // Genişliği artırarak grid yapısının bozulmamasını sağlıyoruz (Desktop görünümü zorla)
       element.style.width = '1400px';
       element.style.padding = '20px';
+      // Arkaplanı kesinlikle beyaz HEX kodu yapıyoruz (oklch hatasını önlemek için)
       element.style.backgroundColor = '#ffffff';
+      element.style.color = '#000000';
 
       // 2. Yüksek kalitede ekran görüntüsü al
       const canvas = await html2canvas(element, {
-        scale: 2, // Retina kalitesi için 2x
+        scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff', // Arkaplanı zorla beyaz yap
+        logging: false
       });
 
       // 3. Stili eski haline getir
       element.style.cssText = originalStyle;
 
-      // 4. PDF Oluştur (Landscape - Yatay A4)
+      // 4. PDF Oluştur
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('l', 'mm', 'a4'); // 'l' = landscape (yatay)
+      const pdf = new jsPDF('l', 'mm', 'a4');
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      // Resmi sayfaya sığdır
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-      // Eğer tek sayfaya sığmıyorsa sığdır, sığıyorsa ortala
       let finalHeight = imgHeight;
       let finalWidth = pdfWidth;
 
       if (imgHeight > pdfHeight) {
-          // Sayfa boyunu aşıyorsa küçült
           const ratio = pdfHeight / imgHeight;
-          finalHeight = pdfHeight - 10; // 10mm margin
+          finalHeight = pdfHeight - 10;
           finalWidth = finalWidth * ratio - 10;
       }
 
@@ -133,13 +132,12 @@ export default function PlannerPage() {
 
       pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
 
-      // Okul adını dosya adı yap
       const safeName = plan?.target_details.school_name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'programim';
       pdf.save(`${safeName}_calisma_programi.pdf`);
 
     } catch (error) {
       console.error('PDF Hatası:', error);
-      alert('PDF oluşturulurken bir hata oluştu.');
+      alert('PDF oluşturulurken bir hata oluştu. Lütfen sayfayı yenileyip tekrar deneyin.');
     } finally {
       setIsDownloading(false);
     }
@@ -219,44 +217,45 @@ export default function PlannerPage() {
       </div>
 
       {/* --- YAZDIRILACAK ALAN BAŞLANGICI --- */}
-      {/* Bu div'in içindeki her şey PDF'te görünecek */}
-      <div ref={printRef} className="space-y-6 bg-gray-50/50 p-2 rounded-xl">
+      {/* NOT: Burada 'bg-blue-50' gibi classlar yerine style={{backgroundColor: '#...'}} kullanıyoruz.
+         Bunun sebebi 'oklch' renk hatasını önlemektir. */}
+      <div ref={printRef} className="space-y-6 p-4 rounded-xl" style={{ backgroundColor: '#f9fafb' }}>
 
           {/* 1. HEDEF BİLGİSİ (KOMPAKT) */}
           {target && (
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+            <div className="p-5 rounded-xl shadow-sm border border-gray-200" style={{ backgroundColor: '#ffffff' }}>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                    <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
                         <Target size={10} /> HEDEFİM
                     </span>
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-800 tracking-tight leading-tight">
+                    <h1 className="text-2xl font-bold tracking-tight leading-tight" style={{ color: '#1f2937' }}>
                         {target.name.split('(')[0].trim()}
                     </h1>
                     <div className="flex items-center gap-3 mt-2 text-sm">
                     {target.score && (
-                        <div className="flex items-center gap-1.5 text-gray-700 bg-orange-50 px-2 py-1 rounded border border-orange-100">
-                        <Trophy size={14} className="text-orange-600" />
-                        <span className="font-bold">{target.score}</span>
-                        <span className="text-gray-500 text-[10px] uppercase font-semibold">Puan</span>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded border" style={{ backgroundColor: '#ffedd5', borderColor: '#fed7aa', color: '#374151' }}>
+                            <Trophy size={14} style={{ color: '#ea580c' }} />
+                            <span className="font-bold">{target.score}</span>
+                            <span className="text-[10px] uppercase font-semibold" style={{ color: '#6b7280' }}>Puan</span>
                         </div>
                     )}
                     {target.percentile && (
-                        <div className="flex items-center gap-1.5 text-gray-700 bg-blue-50 px-2 py-1 rounded border border-blue-100">
-                        <Percent size={14} className="text-blue-600" />
-                        <span className="font-bold">%{target.percentile}</span>
-                        <span className="text-gray-500 text-[10px] uppercase font-semibold">Dilim</span>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded border" style={{ backgroundColor: '#eff6ff', borderColor: '#dbeafe', color: '#374151' }}>
+                            <Percent size={14} style={{ color: '#2563eb' }} />
+                            <span className="font-bold">%{target.percentile}</span>
+                            <span className="text-[10px] uppercase font-semibold" style={{ color: '#6b7280' }}>Dilim</span>
                         </div>
                     )}
                     </div>
                 </div>
                 {target.motivation && (
-                    <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-3 rounded-lg max-w-md">
-                    <p className="text-sm text-indigo-900 italic font-medium leading-relaxed">
-                        "{target.motivation}"
-                    </p>
+                    <div className="p-3 rounded-lg max-w-md" style={{ backgroundColor: '#eef2ff', border: '1px solid #e0e7ff' }}>
+                        <p className="text-sm italic font-medium leading-relaxed" style={{ color: '#312e81' }}>
+                            "{target.motivation}"
+                        </p>
                     </div>
                 )}
                 </div>
@@ -265,14 +264,14 @@ export default function PlannerPage() {
 
           {/* 2. UZMAN GÖRÜŞÜ (KOMPAKT) */}
           {advice && (
-            <div className="bg-white p-4 rounded-xl border-l-4 border-indigo-500 shadow-sm">
+            <div className="p-4 rounded-xl shadow-sm" style={{ backgroundColor: '#ffffff', borderLeft: '4px solid #6366f1' }}>
               <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-indigo-100 rounded-full text-indigo-600 shrink-0 mt-0.5">
+                <div className="p-1.5 rounded-full mt-0.5" style={{ backgroundColor: '#e0e7ff', color: '#4f46e5' }}>
                   <Quote size={16} />
                 </div>
                 <div className="space-y-1">
-                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Koç Stratejisi</h2>
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: '#111827' }}>Koç Stratejisi</h2>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#374151' }}>
                     {advice}
                   </p>
                 </div>
@@ -280,36 +279,46 @@ export default function PlannerPage() {
             </div>
           )}
 
-          {/* 3. PROGRAM GRID (YANYANA GÖRÜNÜM İÇİN 4 KOLON ZORLANDI) */}
+          {/* 3. PROGRAM GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             {scheduleList.map((dayPlan, idx) => (
-              <div key={idx} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-                <div className="bg-gray-100 p-2 border-b border-gray-200 font-bold text-gray-700 text-center uppercase tracking-wide text-xs">
+              <div key={idx} className="rounded-lg shadow-sm border overflow-hidden flex flex-col" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
+                <div className="p-2 border-b font-bold text-center uppercase tracking-wide text-xs" style={{ backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', color: '#374151' }}>
                     {dayPlan.day}
                 </div>
                 <div className="p-2 space-y-1 flex-1">
-                  {dayPlan.blocks.length === 0 ? <p className="text-center text-gray-400 text-xs py-2">-</p> : dayPlan.blocks.map((block, bIdx) => {
+                  {dayPlan.blocks.length === 0 ? <p className="text-center text-xs py-2" style={{ color: '#9ca3af' }}>-</p> : dayPlan.blocks.map((block, bIdx) => {
 
                     const isBreak = block.type === 'break';
-                    let colorClass = "bg-gray-50 border-gray-100 text-gray-600";
-
+                    let boxStyle = {};
                     let displayActivity = block.activity;
 
                     if (isBreak) {
-                        colorClass = "bg-green-50/50 border-green-100/50 text-green-700/70 text-[10px] border-0 justify-center";
+                        // Mola Stili (Yeşilimsi)
+                        boxStyle = { backgroundColor: '#f0fdf4', color: '#15803d', justifyContent: 'center', border: 'none', fontSize: '10px' };
                         displayActivity = getDurationText(block.start, block.end);
                     } else if (block.type === 'lesson') {
-                        colorClass = "bg-blue-50 border-blue-100 text-blue-900 shadow-sm font-semibold";
+                        // Ders Stili (Mavi)
+                        boxStyle = { backgroundColor: '#eff6ff', color: '#1e3a8a', borderColor: '#dbeafe', borderStyle: 'solid', borderWidth: '1px', fontWeight: '600' };
                     }
-                    else if (block.type === 'school') { colorClass = "bg-orange-50 border-orange-100 text-orange-900"; }
-                    else if (block.type === 'course' || block.type === 'bilsem') { colorClass = "bg-purple-50 border-purple-100 text-purple-900"; }
-                    else if (block.type === 'activity') { colorClass = "bg-pink-50 border-pink-100 text-pink-900"; }
+                    else if (block.type === 'school') {
+                        // Okul (Turuncu)
+                        boxStyle = { backgroundColor: '#fff7ed', color: '#9a3412', borderColor: '#ffedd5', borderStyle: 'solid', borderWidth: '1px' };
+                    }
+                    else if (block.type === 'course' || block.type === 'bilsem') {
+                        // Kurs (Mor)
+                        boxStyle = { backgroundColor: '#faf5ff', color: '#6b21a8', borderColor: '#f3e8ff', borderStyle: 'solid', borderWidth: '1px' };
+                    }
+                    else if (block.type === 'activity') {
+                        // Aktivite (Pembe)
+                        boxStyle = { backgroundColor: '#fdf2f8', color: '#9d174d', borderColor: '#fce7f3', borderStyle: 'solid', borderWidth: '1px' };
+                    }
 
                     return (
-                      <div key={bIdx} className={`px-2 py-1.5 rounded border text-xs flex gap-2 items-center ${colorClass} ${isBreak ? 'py-0.5 min-h-[20px]' : ''}`}>
+                      <div key={bIdx} className={`px-2 py-1.5 rounded text-xs flex gap-2 items-center ${isBreak ? 'py-0.5 min-h-[20px]' : ''}`} style={boxStyle}>
                         <div className={`flex-1 ${isBreak ? 'text-center' : ''}`}>
                           <div className="leading-tight">{displayActivity}</div>
-                          {!isBreak && <div className="text-[9px] opacity-70 font-medium">{block.start}-{block.end}</div>}
+                          {!isBreak && <div className="text-[9px] font-medium" style={{ opacity: 0.7 }}>{block.start}-{block.end}</div>}
                         </div>
                       </div>
                     );
