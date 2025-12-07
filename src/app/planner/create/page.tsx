@@ -3,7 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, School, Trophy, Brain, BookOpen, Atom, Plus, Trash2, Palette, Clock, CheckCircle2, Zap, Settings, Coffee, Sun, Moon, Book, Calendar } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+import {
+  ChevronRight, School, Trophy, Brain, BookOpen, Atom, Plus, Trash2,
+  Palette, Clock, CheckCircle2, Zap, Settings, Coffee, Sun, Moon, Book, Calendar
+} from 'lucide-react';
 
 /* ========= TİPLER ========= */
 
@@ -95,10 +99,17 @@ const INITIAL_DATA: PlannerData = {
 
 export default function CreatePlannerPage() {
   const { loading, session } = useAuth();
-  const router = useRouter(); // Router tanımı buradaydı, silinmemiş olmalı
+  const router = useRouter();
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<PlannerData>(INITIAL_DATA);
+
+  // YENİ: Yükleme durumu için state
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
 
   const updateData = (fields: Partial<PlannerData>) => {
     setFormData(prev => ({ ...prev, ...fields }));
@@ -107,25 +118,25 @@ export default function CreatePlannerPage() {
   const nextStep = () => setStep(prev => prev + 1);
   const prevStep = () => setStep(prev => prev - 1);
 
-  // SON ADIM: VERİYİ GÖNDERME (TOKEN DÜZELTMESİ YAPILDI)
+  // SON ADIM: VERİYİ GÖNDERME
   const finishWizard = async () => {
-    // 1. Token Kontrolü
     if (!session?.access_token) {
       alert("Oturum süresi dolmuş veya giriş yapılmamış. Lütfen sayfayı yenileyip tekrar giriş yapın.");
       return;
     }
 
-    const confirmMsg = `Veriler toplandı!\n\nHedef: ${formData.targetSchoolName || formData.targetScore}\nTempo: ${formData.studyTempo}\n\nYapay Zeka programını hazırlamaya başlıyor. Bu işlem 10-20 saniye sürebilir. Onaylıyor musun?`;
+    const confirmMsg = `Veriler toplandı!\n\nHedef: ${formData.targetSchoolName || formData.targetScore}\nTempo: ${formData.studyTempo}\n\nYapay Zeka programını hazırlamaya başlıyor.`;
 
     if (!confirm(confirmMsg)) return;
 
+    // YÜKLEMEYİ BAŞLAT
+    setIsLoading(true);
+
     try {
-      // 2. API İsteği (Token ile birlikte)
       const response = await fetch('/api/generate-plan', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // İŞTE BU SATIR EKSİKTİ VEYA HATALIYDI:
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ formData }),
@@ -137,19 +148,20 @@ export default function CreatePlannerPage() {
         throw new Error(result.error || 'Bir hata oluştu');
       }
 
-      alert("Harika! Programın hazırlandı.");
+      // Başarılı olursa yönlendir (Yükleme ekranı dönmeye devam ederken sayfa değişir)
       router.push('/planner');
 
     } catch (error: any) {
       console.error(error);
       alert("Hata: " + error.message);
+      setIsLoading(false); // Hata durumunda yüklemeyi kapat
     }
   };
 
   if (loading) return <div className="p-10 text-center">Yükleniyor...</div>;
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+    <main className="max-w-3xl mx-auto px-4 py-8 space-y-6 relative">
 
       {/* BAŞLIK & İLERLEME */}
       <div className="space-y-2">
@@ -175,35 +187,237 @@ export default function CreatePlannerPage() {
         {step === 3 && <Step3Activities data={formData} update={updateData} onNext={nextStep} onBack={prevStep} />}
         {step === 4 && <Step4Style data={formData} update={updateData} onFinish={finishWizard} onBack={prevStep} />}
       </div>
+
+      {/* ========================================================= */}
+      {/* YÜKLEME EKRANI (OVERLAY)               */}
+      {/* ========================================================= */}
+      {isLoading && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm text-center animate-in zoom-in duration-300 border border-gray-100">
+
+            {/* Animasyonlu İkon */}
+            <div className="relative mb-6">
+              {/* Dönen Dış Halka */}
+              <div className="w-24 h-24 border-[6px] border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+              {/* Ortadaki Pulsing Beyin */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Brain size={40} className="text-blue-600 animate-pulse" />
+              </div>
+            </div>
+
+            <h3 className="text-xl font-bold text-gray-800 mb-2">
+              Yapay Zeka Çalışıyor...
+            </h3>
+
+            <div className="space-y-2 text-sm text-gray-500">
+              <p>Hedeflerini analiz ediyorum.</p>
+              <p>Ders programını dengeliyorum.</p>
+              <p>Sana özel rotayı çiziyorum.</p>
+            </div>
+
+            <div className="mt-6 bg-blue-50 text-blue-700 px-4 py-3 rounded-lg text-xs font-semibold border border-blue-100">
+              ⏳ Bu işlem yaklaşık 1-2 dakika sürebilir.<br/>
+              Lütfen sayfayı kapatma.
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
 
+// ... (Step1Target, Step2Time, Step3Activities ve Step4Style bileşenleri AYNEN KALACAK -
+// Önceki kodunuzdan kopyaladığınız alt kısımları buraya eklemeyi unutmayın veya mevcut dosyanın sadece üst kısmını değiştirin)
 /* ============================================== */
-/* ADIM 1: HEDEF                                  */
+/* ADIM 1: HEDEF (AKILLI & DETAYLI OKUL ARAMA)    */
 /* ============================================== */
 function Step1Target({ data, update, onNext }: { data: PlannerData; update: (f: Partial<PlannerData>) => void; onNext: () => void }) {
-  const isValid = (data.targetType === 'school' && data.targetSchoolName.length > 2) || (data.targetType === 'score' && data.targetScore.length >= 3);
-  const handleNumberInput = (val: string, field: 'targetScore' | 'targetPercentile') => {
-    if (!/^[0-9.,]*$/.test(val)) return;
-    update({ [field]: val.replace(',', '.') });
+
+  // Supabase bağlantısı (Standart kütüphane ile)
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showResults, setShowResults] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Okul Arama Fonksiyonu
+  const searchSchool = async (query: string) => {
+    update({ targetSchoolName: query });
+
+    // 3 harften azsa arama yapma
+    if (query.length < 3) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    setIsSearching(true);
+
+    // Hem OKUL ADINDA hem de İLÇEDE arama yap (Karesi, Sırrı vb.)
+    const { data: schools, error } = await supabase
+      .from('high_schools')
+      .select('*')
+      .or(`name.ilike.%${query}%,district.ilike.%${query}%`)
+      .limit(10); // Çok şişmesin diye 10 tane getiriyoruz
+
+    if (!error && schools && schools.length > 0) {
+      setSearchResults(schools);
+      setShowResults(true);
+    } else {
+      setSearchResults([]);
+    }
+
+    setIsSearching(false);
   };
+
+  // Okul Seçildiğinde Çalışacak Fonksiyon
+  const selectSchool = (school: any) => {
+    // Okul adını daha detaylı kaydedelim: "Okul Adı (İlçe/Şehir)" formatında
+    // Böylece yapay zeka okulun nerede olduğunu da anlar.
+    const fullName = `${school.name} (${school.district}/${school.city})`;
+
+    update({
+      targetSchoolName: fullName,
+      // Veritabanındaki sayısal veriyi string'e çevirip inputlara basıyoruz
+      targetScore: school.min_score ? school.min_score.toString() : '',
+      targetPercentile: school.percentile ? school.percentile.toString() : '',
+    });
+    setShowResults(false);
+  };
+
+  // Validasyonlar ve Helperlar
+  const isValid = (data.targetType === 'school' && data.targetSchoolName.length > 2) || (data.targetType === 'score' && data.targetScore.length >= 3);
+  const handleNumberInput = (val: string, field: 'targetScore' | 'targetPercentile') => { if (!/^[0-9.,]*$/.test(val)) return; update({ [field]: val.replace(',', '.') }); };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <div className="space-y-1"><h2 className="text-lg font-semibold text-gray-800">Hedefin ne?</h2><p className="text-sm text-gray-500">Yapay zeka seni bu hedefe ulaştırmak için strateji geliştirecek.</p></div>
+
+      {/* BAŞLIK */}
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-gray-800">Hedefin ne?</h2>
+        <p className="text-sm text-gray-500">Listeden okul seçersen puanlar otomatik dolar.</p>
+      </div>
+
+      {/* TİP SEÇİMİ BUTONLARI */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <button onClick={() => update({ targetType: 'school' })} className={`p-4 rounded-xl border-2 text-left transition-all ${data.targetType === 'school' ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-gray-200 hover:border-gray-300'}`}><div className="flex items-center gap-3 mb-2"><School className={data.targetType === 'school' ? 'text-blue-600' : 'text-gray-400'} size={24} /><span className="font-semibold">Lise Hedefim Var</span></div><p className="text-xs text-gray-500">Spesifik bir okul hedefliyorum.</p></button>
         <button onClick={() => update({ targetType: 'score' })} className={`p-4 rounded-xl border-2 text-left transition-all ${data.targetType === 'score' ? 'border-purple-600 bg-purple-50 ring-1 ring-purple-600' : 'border-gray-200 hover:border-gray-300'}`}><div className="flex items-center gap-3 mb-2"><Trophy className={data.targetType === 'score' ? 'text-purple-600' : 'text-gray-400'} size={24} /><span className="font-semibold">Puan Hedefim Var</span></div><p className="text-xs text-gray-500">Puan veya yüzdelik hedefim var.</p></button>
       </div>
+
       <hr className="border-gray-100" />
+
+      {/* FORM ALANLARI */}
       <div className="space-y-4">
-        {data.targetType === 'school' && (<div><label className="block text-sm font-medium text-gray-700 mb-1">Hedef Okul Adı</label><input type="text" value={data.targetSchoolName} onChange={(e) => update({ targetSchoolName: e.target.value })} placeholder="Örn: İstanbul Erkek Lisesi" className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" autoFocus /></div>)}
-        <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Hedef Puan</label><input type="text" inputMode="decimal" value={data.targetScore} onChange={(e) => handleNumberInput(e.target.value, 'targetScore')} placeholder="Örn: 485" className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Hedef Yüzdelik</label><div className="relative"><input type="text" inputMode="decimal" value={data.targetPercentile} onChange={(e) => handleNumberInput(e.target.value, 'targetPercentile')} placeholder="Örn: 0,5" className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none pl-8" /><span className="absolute left-3 top-3.5 text-gray-400 font-bold">%</span></div></div></div>
+
+        {/* OKUL ARAMA KUTUSU */}
+        {data.targetType === 'school' && (
+          <div className="relative group">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Hedef Okul Adı</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={data.targetSchoolName}
+                onChange={(e) => searchSchool(e.target.value)}
+                onFocus={() => { if(data.targetSchoolName.length > 2) setShowResults(true); }}
+                onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                placeholder="Okul adı veya İlçe yaz (Örn: Karesi)..."
+                className="w-full p-3 pl-10 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                autoFocus
+              />
+              <School className="absolute left-3 top-3.5 text-gray-400" size={18} />
+
+              {isSearching && (
+                <div className="absolute right-3 top-3.5 animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+              )}
+            </div>
+
+            {/* ARAMA SONUÇLARI LİSTESİ */}
+            {showResults && searchResults.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto ring-1 ring-black ring-opacity-5">
+                {searchResults.map((school) => (
+                  <button
+                    key={school.id}
+                    onClick={() => selectSchool(school)}
+                    className="w-full text-left p-3 hover:bg-blue-50 border-b border-gray-50 last:border-0 transition-colors group"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        {/* Okul Adı */}
+                        <div className="font-semibold text-gray-800 group-hover:text-blue-700">
+                          {school.name}
+                        </div>
+                        {/* Detaylar: İlçe/İl - Tip */}
+                        <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-2 items-center">
+                           <span>{school.district} / {school.city}</span>
+                           <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                           <span className="text-gray-600 font-medium">{school.type}</span>
+                        </div>
+                        {/* Varsa Yabancı Dil */}
+                        {school.language && (
+                           <div className="text-[10px] text-gray-400 mt-0.5">Dil: {school.language}</div>
+                        )}
+                      </div>
+
+                      {/* Sağ Taraf: Puan ve Yüzdelik */}
+                      <div className="text-right min-w-[70px]">
+                        {school.min_score ? (
+                          <div className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold whitespace-nowrap inline-block">
+                            {Number(school.min_score).toFixed(2)}
+                          </div>
+                        ) : (
+                           <div className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-[10px] whitespace-nowrap">Puansız</div>
+                        )}
+                        {school.percentile && (
+                          <div className="text-xs text-blue-600 mt-1 font-medium whitespace-nowrap">
+                            %{school.percentile}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* SONUÇ BULUNAMADI UYARISI */}
+            {showResults && !isSearching && searchResults.length === 0 && data.targetSchoolName.length > 3 && (
+                 <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm text-gray-500">
+                    Sonuç bulunamadı. İlçe veya okul adını kontrol et.
+                 </div>
+            )}
+          </div>
+        )}
+
+        {/* PUAN INPUTLARI (Otomatik dolsa da elle değiştirilebilir) */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Hedef Puan</label>
+            <input type="text" inputMode="decimal" value={data.targetScore} onChange={(e) => handleNumberInput(e.target.value, 'targetScore')} placeholder="Örn: 485" className={`w-full p-3 rounded-lg border focus:ring-2 outline-none transition-all ${data.targetScore ? 'bg-green-50 border-green-200 focus:ring-green-500' : 'border-gray-300 focus:ring-blue-500'}`} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Hedef Yüzdelik</label>
+            <div className="relative">
+              <input type="text" inputMode="decimal" value={data.targetPercentile} onChange={(e) => handleNumberInput(e.target.value, 'targetPercentile')} placeholder="Örn: 0,5" className={`w-full p-3 rounded-lg border focus:ring-2 outline-none pl-8 transition-all ${data.targetPercentile ? 'bg-green-50 border-green-200 focus:ring-green-500' : 'border-gray-300 focus:ring-blue-500'}`} />
+              <span className="absolute left-3 top-3.5 text-gray-400 font-bold">%</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="pt-4 flex justify-end"><button onClick={onNext} disabled={!isValid} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-all active:scale-95">Sonraki: Zaman<ChevronRight size={20} /></button></div>
+
+      {/* İLERLEME BUTONU */}
+      <div className="pt-4 flex justify-end">
+        <button onClick={onNext} disabled={!isValid} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-all active:scale-95">
+          Sonraki: Zaman <ChevronRight size={20} />
+        </button>
+      </div>
     </div>
   );
 }
+
 
 /* ============================================== */
 /* ADIM 2: ZAMAN                                  */

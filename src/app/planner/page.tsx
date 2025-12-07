@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, BookOpen, MapPin, Trash2, Plus, Quote, TrendingUp, Target, GraduationCap, School, Coffee } from 'lucide-react';
+import {
+  Calendar, Clock, BookOpen, MapPin, Trash2, Plus, Quote,
+  TrendingUp, Target, GraduationCap, School, Coffee, Trophy, Percent
+} from 'lucide-react';
 import Link from 'next/link';
 
 /* ========= TİPLER ========= */
@@ -24,9 +27,11 @@ type StudyPlan = {
   id: string;
   target_details: {
     school_name: string;
-    estimated_score: number;
-    estimated_percentile: number;
-    difficulty_level: string;
+    min_score: number;       // Veritabanındaki isim
+    percentile: string;      // Veritabanındaki isim
+    estimated_score?: number; // Yedek (Eski kayıtlar için)
+    estimated_percentile?: number; // Yedek
+    motivation?: string;
   };
   weekly_schedule: {
     expert_advice: string;
@@ -87,8 +92,21 @@ export default function PlannerPage() {
   };
 
   const scheduleList = getScheduleList();
-  const advice = plan?.weekly_schedule?.expert_advice;
-  const target = plan?.target_details;
+
+  // Tavsiye metnini al ve içinde okul ismi geçiyorsa temizle (Frontend Güvenliği)
+  let advice = plan?.weekly_schedule?.expert_advice || "";
+  const schoolNameSimple = plan?.target_details?.school_name?.split(' ')[0]; // Örn: "Sırrı"
+  if (schoolNameSimple && advice.includes(schoolNameSimple) && advice.length > 50) {
+     advice = advice.replace(new RegExp(schoolNameSimple, 'gi'), 'Şampiyon');
+  }
+
+  // Target verisini normalize et (Eski ve yeni formatı birleştir)
+  const target = plan ? {
+      name: plan.target_details.school_name || "Hedefim",
+      score: plan.target_details.min_score || plan.target_details.estimated_score,
+      percentile: plan.target_details.percentile || plan.target_details.estimated_percentile,
+      motivation: plan.target_details.motivation
+  } : null;
 
   if (authLoading || loading) return <div className="p-8 text-center">Programın yükleniyor...</div>;
 
@@ -108,45 +126,70 @@ export default function PlannerPage() {
   return (
     <main className="space-y-6 pb-10">
 
-      {/* 1. HEDEF BİLGİSİ */}
+      {/* 1. HEDEF BİLGİSİ (YENİ TASARIM) */}
       {target && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8 text-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold uppercase tracking-wider mb-3">
-            <Target size={14} /> Hedefim
-          </div>
-          <h1 className="text-3xl md:text-5xl font-black text-gray-900 uppercase tracking-tight mb-4">
-            {target.school_name}
-          </h1>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-12 text-lg">
-            <div className="flex items-center gap-3 bg-gray-50 px-5 py-3 rounded-xl border border-gray-100">
-              <div className="p-2 bg-green-100 rounded-full text-green-700"><TrendingUp size={20} /></div>
-              <div className="text-left">
-                <p className="text-xs text-gray-500 font-medium uppercase">Taban Puan</p>
-                <p className="font-bold text-gray-900 leading-none">{target.estimated_score}</p>
-              </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+
+            {/* SOL TARAF: OKUL ADI VE BİLGİLER */}
+            <div>
+                <div className="flex items-center gap-2 mb-1">
+                <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Target size={12} /> HEDEFİM
+                </span>
+                </div>
+
+                {/* OKUL ADI (Yuvarlak Hatlı, Temizlenmiş) */}
+                <h1 className="text-2xl font-bold text-gray-800 tracking-tight leading-tight">
+                {/* Parantez içindeki İlçe/İl bilgisini atıyoruz */}
+                {target.name.split('(')[0].trim()}
+                </h1>
+
+                {/* PUAN VE YÜZDELİK */}
+                <div className="flex items-center gap-3 mt-3 text-sm">
+                {target.score && (
+                    <div className="flex items-center gap-1.5 text-gray-700 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100">
+                    <Trophy size={16} className="text-orange-600" />
+                    <span className="font-bold">{target.score}</span>
+                    <span className="text-gray-500 text-xs uppercase font-semibold">Puan</span>
+                    </div>
+                )}
+
+                {target.percentile && (
+                    <div className="flex items-center gap-1.5 text-gray-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                    <Percent size={16} className="text-blue-600" />
+                    <span className="font-bold">%{target.percentile}</span>
+                    <span className="text-gray-500 text-xs uppercase font-semibold">Dilim</span>
+                    </div>
+                )}
+                </div>
             </div>
-            <div className="flex items-center gap-3 bg-gray-50 px-5 py-3 rounded-xl border border-gray-100">
-              <div className="p-2 bg-purple-100 rounded-full text-purple-700"><GraduationCap size={20} /></div>
-              <div className="text-left">
-                <p className="text-xs text-gray-500 font-medium uppercase">Yüzdelik Dilim</p>
-                <p className="font-bold text-gray-900 leading-none">%{target.estimated_percentile}</p>
-              </div>
+
+            {/* SAĞ TARAF: MOTİVASYON KUTUSU (Varsa) */}
+            {target.motivation && (
+                <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-4 rounded-xl max-w-md shadow-sm">
+                <p className="text-sm text-indigo-900 italic font-medium leading-relaxed">
+                    "{target.motivation}"
+                </p>
+                </div>
+            )}
             </div>
-          </div>
         </div>
       )}
 
       {/* 2. UZMAN GÖRÜŞÜ */}
       {advice && (
-        <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 rounded-xl border border-indigo-100 shadow-sm relative">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-white rounded-full shadow-sm text-indigo-600 shrink-0">
-              <Quote size={24} />
+        <div className="bg-white p-6 rounded-xl border-l-4 border-indigo-500 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-5">
+             <Quote size={80} />
+          </div>
+          <div className="flex items-start gap-4 relative z-10">
+            <div className="p-2 bg-indigo-100 rounded-full text-indigo-600 shrink-0 mt-1">
+              <Quote size={20} />
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-bold text-indigo-900">Haftalık Koç Stratejisi</h2>
-              <p className="text-gray-800 italic leading-relaxed whitespace-pre-wrap">
+              <h2 className="text-lg font-bold text-gray-900">Haftalık Koç Stratejisi</h2>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
                 {advice}
               </p>
             </div>
@@ -155,52 +198,54 @@ export default function PlannerPage() {
       )}
 
       {/* 3. PROGRAM BAŞLIK */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-1 pt-4">
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-1 pt-2">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <Calendar className="text-blue-600" /> Haftalık Programım
         </h2>
         <div className="flex gap-2">
-          <Link href="/planner/create" className="px-4 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium">Yeni Program</Link>
-          <button onClick={deletePlan} className="px-4 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium flex items-center gap-2"><Trash2 size={16} /> Sil</button>
+          <Link href="/planner/create" className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">Yeniden Oluştur</Link>
+          <button onClick={deletePlan} className="px-4 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium flex items-center gap-2 border border-red-100"><Trash2 size={16} /> Sil</button>
         </div>
       </div>
 
       {/* 4. PROGRAM GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {scheduleList.map((dayPlan, idx) => (
-          <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-            <div className="bg-gray-50 p-3 border-b font-bold text-gray-700 text-center">{dayPlan.day}</div>
-            <div className="p-2 space-y-1 flex-1">
+          <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow duration-300">
+            <div className="bg-gray-50/80 p-3 border-b border-gray-100 font-bold text-gray-700 text-center uppercase tracking-wide text-xs">
+                {dayPlan.day}
+            </div>
+            <div className="p-2 space-y-1.5 flex-1">
               {dayPlan.blocks.length === 0 ? <p className="text-center text-gray-400 text-sm py-4">Boş gün 🎉</p> : dayPlan.blocks.map((block, bIdx) => {
 
                 const isBreak = block.type === 'break';
                 let colorClass = "bg-gray-50 border-gray-100 text-gray-600";
                 let icon = <Clock size={14} />;
 
-                // Mola Metni: Eğer "Mola" ise saat yerine "10 dk Mola" yaz
                 let displayActivity = block.activity;
                 let displayTime = `${block.start} - ${block.end}`;
 
                 if (isBreak) {
-                   // Minimal Mola Stili
-                   colorClass = "bg-green-50/30 border-green-100/50 text-green-600/80 text-xs border-0 justify-center";
-                   icon = <Coffee size={12} className="hidden" />; // İkonu gizle, sadece yazı ortada dursun
-                   displayActivity = getDurationText(block.start, block.end); // "10 dk Mola"
-                   displayTime = ""; // Saati gizle
+                    // Minimal Mola
+                    colorClass = "bg-green-50/50 border-green-100/50 text-green-700/70 text-xs border-0 justify-center";
+                    icon = <Coffee size={12} className="hidden" />;
+                    displayActivity = getDurationText(block.start, block.end);
+                    displayTime = "";
                 } else if (block.type === 'lesson') {
-                   colorClass = "bg-blue-50 border-blue-100 text-blue-800 py-2";
-                   icon = <BookOpen size={14} />;
+                    // Dersler (Matematik vb.)
+                    colorClass = "bg-blue-50 border-blue-100 text-blue-900 shadow-sm";
+                    icon = <BookOpen size={14} className="text-blue-500" />;
                 }
-                else if (block.type === 'school') { colorClass = "bg-orange-50 border-orange-100 text-orange-800 py-2"; icon = <School size={14} />; }
-                else if (block.type === 'course' || block.type === 'bilsem') { colorClass = "bg-purple-50 border-purple-100 text-purple-800 py-2"; icon = <MapPin size={14} />; }
-                else if (block.type === 'activity') { colorClass = "bg-pink-50 border-pink-100 text-pink-800 py-2"; icon = <Clock size={14} />; }
+                else if (block.type === 'school') { colorClass = "bg-orange-50 border-orange-100 text-orange-900"; icon = <School size={14} className="text-orange-500" />; }
+                else if (block.type === 'course' || block.type === 'bilsem') { colorClass = "bg-purple-50 border-purple-100 text-purple-900"; icon = <MapPin size={14} className="text-purple-500" />; }
+                else if (block.type === 'activity') { colorClass = "bg-pink-50 border-pink-100 text-pink-900"; icon = <Clock size={14} className="text-pink-500" />; }
 
                 return (
-                  <div key={bIdx} className={`px-2 rounded-lg border text-sm flex gap-2 items-center ${colorClass} ${isBreak ? 'h-6 min-h-0' : ''}`}>
-                    {!isBreak && <div className="opacity-70 shrink-0">{icon}</div>}
+                  <div key={bIdx} className={`px-3 py-2 rounded-lg border text-sm flex gap-3 items-center ${colorClass} ${isBreak ? 'py-1 min-h-[24px]' : ''}`}>
+                    {!isBreak && <div className="shrink-0">{icon}</div>}
                     <div className={`flex-1 ${isBreak ? 'text-center font-medium' : ''}`}>
-                      <div className={isBreak ? '' : 'font-semibold'}>{displayActivity}</div>
-                      {!isBreak && <div className="text-xs opacity-80">{displayTime}</div>}
+                      <div className={isBreak ? '' : 'font-semibold leading-tight'}>{displayActivity}</div>
+                      {!isBreak && <div className="text-[10px] opacity-70 mt-0.5 font-medium">{displayTime}</div>}
                     </div>
                   </div>
                 );
