@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-// Web arayüzü için ikonları tutuyoruz
 import {
   Calendar, Clock, BookOpen, MapPin, Trash2, Plus, Quote,
   Target, School, Coffee, Trophy, Percent, Download, Loader2
@@ -79,7 +78,7 @@ export default function PlannerPage() {
   };
 
   /* ======================================================== */
-  /* PDF İNDİRME FONKSİYONU (ZIRHLI VERSİYON - EMOJI FIX)     */
+  /* PDF İNDİRME FONKSİYONU (SON ÇÖZÜM: CLASS TEMİZLİĞİ)      */
   /* ======================================================== */
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
@@ -89,14 +88,14 @@ export default function PlannerPage() {
     const originalStyle = element.style.cssText;
 
     try {
-      // 1. Görünümü PDF için hazırla
+      // 1. Görünümü Hazırla
       element.style.width = '1400px';
       element.style.padding = '30px';
       element.style.backgroundColor = '#ffffff';
       element.style.color = '#000000';
       element.style.fontFamily = 'Arial, sans-serif';
 
-      // 2. Fotoğrafı Çek
+      // 2. Fotoğraf Çek (onclone İle Temizlik Yaparak)
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -105,11 +104,26 @@ export default function PlannerPage() {
         scrollX: 0,
         scrollY: 0,
         windowWidth: 1400,
-        // SVG klonlamasını devre dışı bırakıp native render zorlayalım (Garanti olsun)
-        ignoreElements: (node) => node.nodeName === 'svg'
+        ignoreElements: (node) => node.nodeName === 'svg', // İkonları yoksay (Garanti olsun)
+
+        // --- KRİTİK ÇÖZÜM: 'oklch' HATASINI ENGELLEMEK İÇİN ---
+        onclone: (clonedDoc) => {
+            // Kopyalanan dökümandaki hedef elementi bul
+            const clonedElement = clonedDoc.querySelector('[data-print-target="true"]');
+            if (clonedElement) {
+                // Tailwind classlarını tamamen sil.
+                // Böylece 'oklch' renklerini içeren global stiller devre dışı kalır.
+                // Sadece bizim verdiğimiz inline style'lar kalır.
+                const allElements = clonedElement.querySelectorAll('*');
+                allElements.forEach((el) => {
+                    el.removeAttribute('class');
+                });
+                clonedElement.removeAttribute('class');
+            }
+        }
       });
 
-      // 3. Stili HEMEN eski haline getir
+      // 3. Stili geri al
       element.style.cssText = originalStyle;
 
       // 4. PDF Oluştur
@@ -141,7 +155,7 @@ export default function PlannerPage() {
 
     } catch (error) {
       console.error('PDF Hatası:', error);
-      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+      alert('PDF oluşturulamadı. Lütfen tekrar deneyin.');
     } finally {
       if (printRef.current) printRef.current.style.cssText = originalStyle;
       setIsDownloading(false);
@@ -221,9 +235,10 @@ export default function PlannerPage() {
       </div>
 
       {/* --- YAZDIRILACAK ALAN --- */}
-      {/* NOT: Emojiler kullanıldı, SVG ikonlar kaldırıldı. oklch hatası imkansız hale getirildi. */}
+      {/* data-print-target="true" etiketi eklendi. onclone burayı bulup temizleyecek. */}
       <div
         ref={printRef}
+        data-print-target="true"
         style={{
             backgroundColor: '#f9fafb',
             padding: '16px',
@@ -292,7 +307,7 @@ export default function PlannerPage() {
                             padding: '12px',
                             borderRadius: '8px',
                             maxWidth: '400px',
-                            display: 'none' // Mobilde gizli, PDF'te çıkması için genişlik artıyor
+                            display: 'none' // Mobilde gizli
                         }} className="hidden md:block">
                             <p style={{ fontSize: '14px', fontStyle: 'italic', fontWeight: '500', color: '#312e81', margin: 0 }}>
                                 "{target.motivation}"
@@ -362,12 +377,12 @@ export default function PlannerPage() {
 
                     const isBreak = block.type === 'break';
                     let displayActivity = block.activity;
-                    // Varsayılan Stil (Ders)
+                    // Varsayılan Stil
                     let bg = '#eff6ff'; // Mavi
                     let border = '#dbeafe';
                     let text = '#1e3a8a';
                     let weight = '600';
-                    let emoji = '📘'; // Ders
+                    let emoji = '📘';
 
                     if (isBreak) {
                         bg = '#f0fdf4'; // Yeşil
@@ -375,7 +390,7 @@ export default function PlannerPage() {
                         text = '#15803d';
                         displayActivity = getDurationText(block.start, block.end);
                         weight = 'normal';
-                        emoji = ''; // Mola
+                        emoji = '';
                     } else if (block.type === 'school') {
                         bg = '#fff7ed'; // Turuncu
                         border = '#ffedd5';
