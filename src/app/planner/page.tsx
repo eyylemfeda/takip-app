@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+// Web arayüzü için ikonları tutuyoruz
 import {
   Calendar, Clock, BookOpen, MapPin, Trash2, Plus, Quote,
   Target, School, Coffee, Trophy, Percent, Download, Loader2
@@ -78,7 +79,7 @@ export default function PlannerPage() {
   };
 
   /* ======================================================== */
-  /* PDF İNDİRME FONKSİYONU (SON FİX: İKON RENKLERİ)          */
+  /* PDF İNDİRME FONKSİYONU (ZIRHLI VERSİYON - EMOJI FIX)     */
   /* ======================================================== */
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
@@ -103,7 +104,9 @@ export default function PlannerPage() {
         logging: false,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: 1400
+        windowWidth: 1400,
+        // SVG klonlamasını devre dışı bırakıp native render zorlayalım (Garanti olsun)
+        ignoreElements: (node) => node.nodeName === 'svg'
       });
 
       // 3. Stili HEMEN eski haline getir
@@ -115,6 +118,7 @@ export default function PlannerPage() {
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
+
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
@@ -137,7 +141,7 @@ export default function PlannerPage() {
 
     } catch (error) {
       console.error('PDF Hatası:', error);
-      alert('PDF oluşturulamadı. Lütfen sayfayı yenileyip tekrar deneyin.');
+      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       if (printRef.current) printRef.current.style.cssText = originalStyle;
       setIsDownloading(false);
@@ -217,6 +221,7 @@ export default function PlannerPage() {
       </div>
 
       {/* --- YAZDIRILACAK ALAN --- */}
+      {/* NOT: Emojiler kullanıldı, SVG ikonlar kaldırıldı. oklch hatası imkansız hale getirildi. */}
       <div
         ref={printRef}
         style={{
@@ -247,11 +252,9 @@ export default function PlannerPage() {
                                 fontWeight: 'bold',
                                 padding: '2px 8px',
                                 borderRadius: '99px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
+                                display: 'flex', alignItems: 'center', gap: '4px'
                             }}>
-                                <Target size={10} /> HEDEFİM
+                                🎯 HEDEFİM
                             </span>
                         </div>
                         <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0, lineHeight: 1.2 }}>
@@ -264,7 +267,7 @@ export default function PlannerPage() {
                                     padding: '4px 8px', borderRadius: '6px',
                                     backgroundColor: '#ffedd5', border: '1px solid #fed7aa', color: '#374151'
                                 }}>
-                                    <Trophy size={14} color="#ea580c" />
+                                    <span>🏆</span>
                                     <span style={{ fontWeight: 'bold' }}>{target.score}</span>
                                     <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', color: '#6b7280' }}>Puan</span>
                                 </div>
@@ -275,7 +278,7 @@ export default function PlannerPage() {
                                     padding: '4px 8px', borderRadius: '6px',
                                     backgroundColor: '#eff6ff', border: '1px solid #dbeafe', color: '#374151'
                                 }}>
-                                    <Percent size={14} color="#2563eb" />
+                                    <span>📊</span>
                                     <span style={{ fontWeight: 'bold' }}>%{target.percentile}</span>
                                     <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', color: '#6b7280' }}>Dilim</span>
                                 </div>
@@ -289,7 +292,7 @@ export default function PlannerPage() {
                             padding: '12px',
                             borderRadius: '8px',
                             maxWidth: '400px',
-                            display: 'none'
+                            display: 'none' // Mobilde gizli, PDF'te çıkması için genişlik artıyor
                         }} className="hidden md:block">
                             <p style={{ fontSize: '14px', fontStyle: 'italic', fontWeight: '500', color: '#312e81', margin: 0 }}>
                                 "{target.motivation}"
@@ -311,9 +314,7 @@ export default function PlannerPage() {
                 marginBottom: '16px'
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <div style={{ backgroundColor: '#e0e7ff', color: '#4f46e5', padding: '6px', borderRadius: '99px', marginTop: '2px' }}>
-                  <Quote size={16} />
-                </div>
+                <div style={{ fontSize: '20px', marginTop: '-4px' }}>💬</div>
                 <div style={{ flex: 1 }}>
                   <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0' }}>
                     Koç Stratejisi
@@ -361,37 +362,35 @@ export default function PlannerPage() {
 
                     const isBreak = block.type === 'break';
                     let displayActivity = block.activity;
-
-                    // Varsayılan Stil (Varsayılan Renkler)
-                    let bg = '#eff6ff'; // Mavi (Ders)
+                    // Varsayılan Stil (Ders)
+                    let bg = '#eff6ff'; // Mavi
                     let border = '#dbeafe';
                     let text = '#1e3a8a';
                     let weight = '600';
-                    let icon = <BookOpen size={14} color="#3b82f6" />; // Varsayılan İkon ve Rengi
+                    let emoji = '📘'; // Ders
 
-                    // --- KRİTİK FİX: BURADAKİ İKONLARA HEX RENK VERİLDİ ---
                     if (isBreak) {
-                        bg = '#f0fdf4';
+                        bg = '#f0fdf4'; // Yeşil
                         border = 'transparent';
                         text = '#15803d';
                         displayActivity = getDurationText(block.start, block.end);
                         weight = 'normal';
-                        icon = null; // Mola ikonu yok
+                        emoji = ''; // Mola
                     } else if (block.type === 'school') {
-                        bg = '#fff7ed';
+                        bg = '#fff7ed'; // Turuncu
                         border = '#ffedd5';
                         text = '#9a3412';
-                        icon = <School size={14} color="#f97316" />; // Turuncu HEX
+                        emoji = '🏫';
                     } else if (block.type === 'course' || block.type === 'bilsem') {
-                        bg = '#faf5ff';
+                        bg = '#faf5ff'; // Mor
                         border = '#f3e8ff';
                         text = '#6b21a8';
-                        icon = <MapPin size={14} color="#a855f7" />; // Mor HEX
+                        emoji = '📚';
                     } else if (block.type === 'activity') {
-                        bg = '#fdf2f8';
+                        bg = '#fdf2f8'; // Pembe
                         border = '#fce7f3';
                         text = '#9d174d';
-                        icon = <Clock size={14} color="#ec4899" />; // Pembe HEX
+                        emoji = '🎨';
                     }
 
                     return (
@@ -404,11 +403,11 @@ export default function PlannerPage() {
                           fontSize: '12px',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '8px',
+                          gap: '6px',
                           minHeight: isBreak ? '20px' : 'auto',
                           justifyContent: isBreak ? 'center' : 'flex-start'
                       }}>
-                        {icon && <div style={{ flexShrink: 0 }}>{icon}</div>}
+                        {emoji && <span style={{ fontSize: '14px', lineHeight: 1 }}>{emoji}</span>}
                         <div style={{ flex: 1, textAlign: isBreak ? 'center' : 'left' }}>
                           <div style={{ lineHeight: '1.2', fontWeight: weight }}>{displayActivity}</div>
                           {!isBreak && <div style={{ fontSize: '9px', fontWeight: '500', opacity: 0.7, marginTop: '2px' }}>{block.start}-{block.end}</div>}
