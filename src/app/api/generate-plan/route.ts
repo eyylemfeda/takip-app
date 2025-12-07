@@ -153,46 +153,60 @@ export async function POST(req: NextRequest) {
         if (validModel) selectedModel = validModel.name;
     }
 
-    // --- GÜNCELLENMİŞ PROMPT: HAZIR VERİLERİ KULLAN ---
+    // --- YENİ KATI PROMPT: SAYISAL/SÖZEL DENGESİ ---
     const prompt = `
-      Sen profesyonel bir LGS Koçusun.
-      GÖREV: Programdaki "AI_FILL_ME" kutularını doldur ve hedef okulu analiz et.
+      Sen çok disiplinli ve stratejik bir LGS Koçusun.
+      GÖREV: Aşağıdaki ders programını kurallara %100 uyarak doldur.
 
-      ÖĞRENCİ VERİLERİ (KESİN BİLGİLER):
-      - Hedef Okul: "${formData.targetSchoolName || ''}"
-      - Hedef Puan: "${formData.targetScore || ''}"
-      - Hedef Yüzdelik: "${formData.targetPercentile || ''}"
+      DERS KATEGORİLERİ (BUNU EZBERLE):
+      - SAYISAL DERSLER: Matematik, Fen Bilimleri
+      - SÖZEL DERSLER: Türkçe, T.C. İnkılap, İngilizce, Din Kültürü
+
+      ÖĞRENCİ BİLGİLERİ:
+      - Hedef: "${formData.targetSchoolName || formData.targetScore}"
       - Zayıf Dersler: ${formData.difficultSubjects?.join(', ')}
-      - Sıklıklar: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v}`).join(', ')}
+      - İstenen Ders Sıklıkları: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v} kez`).join(', ')}
 
       HEDEF OKUL ANALİZİ:
       1. Okul Adı: Verilen okul adını kullan.
-      2. Puan & Yüzdelik: Yukarıdaki verileri aynen kullan. Eğer boşsalar mantıklı bir tahmin yap ama boş bırakma.
+      2. Puan & Yüzdelik: Yukarıdaki verileri kullan.
+      3. Hitap: "Merhaba Sevgili Öğrenci" diye başla. Okul adıyla hitap etme.
 
-      HİTAP KURALLARI (ÇOK ÖNEMLİ):
-      1. **YASAK:** Öğrenciye ASLA okul adıyla (Örn: "Merhaba Sırrı", "Naber Kabataş") hitap etme!
-      2. **DOĞRUSU:** "Merhaba Sevgili Öğrenci" diye başla.
+      PROGRAM YERLEŞTİRME KURALLARI (ÇOK ÖNEMLİ):
 
-      PROGRAM KURALLARI:
-      1. İlk kutu her gün "Paragraf Soru Çözümü".
-      2. Dersler: Matematik, Fen Bilimleri, T.C. İnkılap, İngilizce, Din Kültürü, Türkçe.
-      3. Blok ders yap (Mat, Mat). Hafta sonu esnek ol.
+      KURAL 1: SABİT BAŞLANGIÇ
+      - Her günün 1. dersi MUTLAKA "Paragraf Soru Çözümü" olacak.
+      - Her günün 2. dersi MUTLAKA "Matematik" olacak. (Bu kural değişmez).
+
+      KURAL 2: ZİG-ZAG YÖNTEMİ (SAYISAL - SÖZEL DENGESİ)
+      - Asla iki sayısal dersi (Mat, Fen) peş peşe koyma.
+      - Asla iki sözel dersi (Türkçe, İnkılap, İng, Din) peş peşe koyma.
+      - Örnek Akış: Paragraf(Sözel) -> Matematik(Sayısal) -> Türkçe(Sözel) -> Fen(Sayısal) -> İnkılap(Sözel)...
+      - Matematik'ten sonra mutlaka Sözel bir ders gelmeli.
+
+      KURAL 3: GÜNLÜK DENGE
+      - Her gün mutlaka hem Sayısal hem Sözel ders olacak. Bir günü sadece sözele veya sadece sayısala boğma.
+
+      KURAL 4: MATEMATİK YOĞUNLUĞU
+      - Zaten her gün 1 saat matematik (2. derste) var.
+      - Eğer öğrenci matematikte zorlanıyorsa veya hafta sonuysa, günün ilerleyen saatlerine (akşam tarafına) 2. bir Matematik dersi daha koyabilirsin.
 
       ÇIKTI (JSON):
       {
          "target_analysis": {
             "school_name": "Tam Okul Adı",
-            "min_score": 484.55,
-            "percentile": "0.92",
-            "motivation": "Motive edici kısa bir cümle."
+            "min_score": 485,
+            "percentile": "0.85",
+            "motivation": "Motive edici bir cümle."
          },
-         "expert_advice": "Samimi koç tavsiyesi. Mutlaka 'Merhaba Sevgili Öğrenci' diye başla.",
+         "expert_advice": "Merhaba Sevgili Öğrenci... (Tavsiyeler)",
          "schedule": [ ... ]
       }
 
       PROGRAM İSKELETİ:
       ${JSON.stringify(scheduleSkeleton)}
     `;
+
     console.log(`2. AI İsteği gönderiliyor (${selectedModel})...`);
 
     const modelNameClean = selectedModel.replace('models/', '');
@@ -230,35 +244,42 @@ export async function POST(req: NextRequest) {
     }
 
     // --- EMNİYET SİBOBU (FALLBACK) ---
-    // AI veriyi boş gönderirse biz dolduruyoruz.
     const analysis = generatedData.target_analysis || {};
 
-    // 1. Okul Adı Yoksa Düzelt
     if (!analysis.school_name || analysis.school_name.length < 3) {
-        analysis.school_name = formData.targetSchoolName || "Hedef Lise";
+        analysis.school_name = formData.targetSchoolName || "Hedef Okul";
     }
 
-    // 2. Puan Yoksa Düzelt (480-495 arası rastgele ata eğer hedef okulsa)
-    if (!analysis.min_score || analysis.min_score === 0) {
-        // Eğer kullanıcı puan girdiyse onu kullan, yoksa yüksek bir hedef ata
+    let score = parseFloat(analysis.min_score);
+    if (!score || isNaN(score) || score < 200) {
         const userScore = parseFloat(formData.targetScore);
-        if (userScore > 0) {
+        if (userScore > 200) {
             analysis.min_score = userScore;
         } else {
-             // Fen veya Anadolu lisesi gibi düşünerek yüksek puan atıyoruz
-            analysis.min_score = 480 + Math.floor(Math.random() * 10);
+            analysis.min_score = 485;
         }
     }
 
-    // 3. Yüzdelik Yoksa Düzelt
     if (!analysis.percentile || analysis.percentile === "" || analysis.percentile === "0") {
-        if (analysis.min_score > 480) analysis.percentile = "0.85";
-        else if (analysis.min_score > 460) analysis.percentile = "2.1";
+        const s = parseFloat(analysis.min_score);
+        if (s > 490) analysis.percentile = "0.5";
+        else if (s > 480) analysis.percentile = "1.5";
+        else if (s > 460) analysis.percentile = "3.0";
         else analysis.percentile = "5.0";
     }
 
-    // Veriyi güncelle
     generatedData.target_analysis = analysis;
+
+    // Tavsiye içindeki isim düzeltmesi
+    let advice = generatedData.expert_advice || "";
+    const badName = formData.targetSchoolName ? formData.targetSchoolName.split(' ')[0] : null;
+    if (badName && advice.includes(badName)) {
+        advice = advice.replace(new RegExp(badName, 'gi'), 'Şampiyon');
+        if (formData.targetSchoolName) {
+            advice = advice.replace(new RegExp(formData.targetSchoolName, 'gi'), 'bu okul');
+        }
+        generatedData.expert_advice = advice;
+    }
 
     // --- ADIM 3: KAYDETME ---
     console.log("3. Veritabanına kaydediliyor...");

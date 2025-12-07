@@ -150,9 +150,21 @@ function NewRecordInner() {
 
     const q = questionCount ? Number(questionCount) : null;
     const d = durationMin ? Number(durationMin) : null;
+
     if (q === null && d === null) {
       return setMsg('En az birini doldurun: Soru sayısı veya Çalışma süresi.');
     }
+
+    // --- YENİ EKLENEN KONTROL ---
+    // Eğer soru sayısı girilmişse (q > 0) ve kaynak seçili değilse hata ver.
+    if (q && q > 0 && !sourceId) {
+      // Eğer input alanında bir metin varsa ama ekle butonuna basılmamışsa kullanıcıyı uyar.
+      if (newSourceName.trim().length > 0) {
+        return setMsg('Kaynak ismini yazdınız ama "Ekle" butonuna basmadınız. Lütfen önce kaynağı ekleyin.');
+      }
+      return setMsg('Soru sayısı girdiğinizde mutlaka bir Kaynak seçmelisiniz.');
+    }
+    // -----------------------------
 
     let activity_date: string | null = null;
     let off_calendar = false;
@@ -208,8 +220,10 @@ function NewRecordInner() {
       setQuestionCount('');
       setDurationMin('');
       setNote('');
-      setTopicId('');
-      setSourceId('');
+      // Kayıt başarılı olduğunda topic ve source'u sıfırlamak isteğe bağlıdır,
+      // seri giriş için genelde tutmak iyidir ama sıfırlamak isterseniz:
+      // setTopicId('');
+      // setSourceId('');
       setMsg('Kayıt oluşturuldu.');
     }
   }
@@ -339,7 +353,7 @@ function NewRecordInner() {
           )}
         </div>
 
-        {msg && <p className="text-sm text-red-600">{msg}</p>}
+        {msg && <p className="text-sm text-red-600 font-medium bg-red-50 p-2 rounded">{msg}</p>}
 
         <div className="pt-1 flex justify-end">
           <button type="submit" className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
