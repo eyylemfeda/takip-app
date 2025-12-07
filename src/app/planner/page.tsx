@@ -78,34 +78,39 @@ export default function PlannerPage() {
   };
 
   /* ======================================================== */
-  /* PDF İNDİRME FONKSİYONU (RENK HATASI FİXLENDİ)            */
+  /* PDF İNDİRME FONKSİYONU (SAF CSS İLE FIXLENDİ)            */
   /* ======================================================== */
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
     setIsDownloading(true);
 
     const element = printRef.current;
-    // Orijinal stili yedeğe al
     const originalStyle = element.style.cssText;
 
     try {
-      // 1. Görünümü PDF için zorla (A4 Yatay sığması için genişlik veriyoruz)
+      // 1. Görünümü PDF için hazırla (A4 Yatay genişliği)
+      // Arkaplanı ve rengi HEX kodu olarak zorla veriyoruz.
       element.style.width = '1400px';
-      element.style.padding = '20px';
+      element.style.padding = '30px';
       element.style.backgroundColor = '#ffffff';
+      element.style.color = '#000000';
+      element.style.fontFamily = 'Arial, sans-serif'; // Font garantisi
 
       // 2. Fotoğrafı Çek
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff', // Arkaplanı kesin beyaz yap
+        backgroundColor: '#ffffff', // Kesinlikle beyaz
         logging: false,
         scrollX: 0,
         scrollY: 0,
         windowWidth: 1400
       });
 
-      // 3. PDF Oluştur
+      // 3. Stili HEMEN eski haline getir (Hata olsa bile arayüz bozulmasın diye try içinde de çağırıyoruz)
+      element.style.cssText = originalStyle;
+
+      // 4. PDF Oluştur
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('l', 'mm', 'a4');
 
@@ -118,7 +123,6 @@ export default function PlannerPage() {
       let finalHeight = imgHeight;
       let finalWidth = pdfWidth;
 
-      // Sayfaya sığmazsa küçült
       if (imgHeight > pdfHeight) {
           const ratio = pdfHeight / imgHeight;
           finalHeight = pdfHeight - 10;
@@ -135,10 +139,12 @@ export default function PlannerPage() {
 
     } catch (error) {
       console.error('PDF Hatası:', error);
-      alert('PDF oluşturulurken bir hata oluştu. Tarayıcı önbelleğini temizlemeyi deneyin.');
+      alert('PDF oluşturulamadı. Lütfen sayfayı yenileyip tekrar deneyin.');
     } finally {
-      // 4. Stili MUTLAKA eski haline getir (Mobilde bozulmasın diye)
-      element.style.cssText = originalStyle;
+      // Her ihtimale karşı stili sıfırla
+      if (printRef.current) {
+          printRef.current.style.cssText = originalStyle;
+      }
       setIsDownloading(false);
     }
   };
@@ -215,67 +221,111 @@ export default function PlannerPage() {
          </div>
       </div>
 
-      {/* --- YAZDIRILACAK ALAN BAŞLANGICI --- */}
-      {/* ÖNEMLİ: Burada 'oklch' renk hatasını önlemek için Tailwind renk classlarını (bg-blue-50 vb.) KULLANMIYORUZ.
-          Hepsi style={{ backgroundColor: '#HEX' }} şeklinde manuel veriliyor. */}
-      <div ref={printRef} className="space-y-6 p-4 rounded-xl" style={{ backgroundColor: '#f9fafb' }}>
+      {/* --- YAZDIRILACAK ALAN --- */}
+      {/* NOT: BURADA TAILWIND CLASS'LARI (border-gray-200 vb) YASAK.
+          HEPSİ style={{...}} İÇİNDE HEX KODU İLE VERİLDİ. OKLCH HATASINI ÇÖZEN TEK YOL BU. */}
+      <div
+        ref={printRef}
+        style={{
+            backgroundColor: '#f9fafb',
+            padding: '16px',
+            borderRadius: '12px',
+            color: '#000000'
+        }}
+      >
 
           {/* 1. HEDEF BİLGİSİ */}
           {target && (
-            <div className="p-5 rounded-xl shadow-sm border" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
-                          style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}> {/* bg-blue-100, text-blue-700 */}
-                        <Target size={10} /> HEDEFİM
-                    </span>
+            <div style={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '16px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <span style={{
+                                backgroundColor: '#dbeafe',
+                                color: '#1d4ed8',
+                                fontSize: '10px',
+                                fontWeight: 'bold',
+                                padding: '2px 8px',
+                                borderRadius: '99px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}>
+                                <Target size={10} /> HEDEFİM
+                            </span>
+                        </div>
+                        <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0, lineHeight: 1.2 }}>
+                            {target.name.split('(')[0].trim()}
+                        </h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', fontSize: '14px' }}>
+                            {target.score && (
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '4px 8px', borderRadius: '6px',
+                                    backgroundColor: '#ffedd5', border: '1px solid #fed7aa', color: '#374151'
+                                }}>
+                                    <Trophy size={14} color="#ea580c" />
+                                    <span style={{ fontWeight: 'bold' }}>{target.score}</span>
+                                    <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', color: '#6b7280' }}>Puan</span>
+                                </div>
+                            )}
+                            {target.percentile && (
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '4px 8px', borderRadius: '6px',
+                                    backgroundColor: '#eff6ff', border: '1px solid #dbeafe', color: '#374151'
+                                }}>
+                                    <Percent size={14} color="#2563eb" />
+                                    <span style={{ fontWeight: 'bold' }}>%{target.percentile}</span>
+                                    <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', color: '#6b7280' }}>Dilim</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <h1 className="text-2xl font-bold tracking-tight leading-tight" style={{ color: '#1f2937' }}>
-                        {target.name.split('(')[0].trim()}
-                    </h1>
-                    <div className="flex items-center gap-3 mt-2 text-sm">
-                    {target.score && (
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded border"
-                             style={{ backgroundColor: '#ffedd5', borderColor: '#fed7aa', color: '#374151' }}> {/* bg-orange-50 */}
-                            <Trophy size={14} style={{ color: '#ea580c' }} />
-                            <span className="font-bold">{target.score}</span>
-                            <span className="text-[10px] uppercase font-semibold" style={{ color: '#6b7280' }}>Puan</span>
+                    {target.motivation && (
+                        <div style={{
+                            backgroundColor: '#eef2ff',
+                            border: '1px solid #e0e7ff',
+                            padding: '12px',
+                            borderRadius: '8px',
+                            maxWidth: '400px',
+                            display: 'none' // Mobilde/Dar alanda gizle, PDF'te görünür yapmak için aşağıda CSS trick var ama şimdilik gizli kalsın taşmasın
+                        }} className="hidden md:block">
+                            <p style={{ fontSize: '14px', fontStyle: 'italic', fontWeight: '500', color: '#312e81', margin: 0 }}>
+                                "{target.motivation}"
+                            </p>
                         </div>
                     )}
-                    {target.percentile && (
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded border"
-                             style={{ backgroundColor: '#eff6ff', borderColor: '#dbeafe', color: '#374151' }}> {/* bg-blue-50 */}
-                            <Percent size={14} style={{ color: '#2563eb' }} />
-                            <span className="font-bold">%{target.percentile}</span>
-                            <span className="text-[10px] uppercase font-semibold" style={{ color: '#6b7280' }}>Dilim</span>
-                        </div>
-                    )}
-                    </div>
-                </div>
-                {target.motivation && (
-                    <div className="p-3 rounded-lg max-w-md"
-                         style={{ backgroundColor: '#eef2ff', border: '1px solid #e0e7ff' }}> {/* bg-indigo-50 */}
-                        <p className="text-sm italic font-medium leading-relaxed" style={{ color: '#312e81' }}>
-                            "{target.motivation}"
-                        </p>
-                    </div>
-                )}
                 </div>
             </div>
           )}
 
           {/* 2. UZMAN GÖRÜŞÜ */}
           {advice && (
-            <div className="p-4 rounded-xl shadow-sm"
-                 style={{ backgroundColor: '#ffffff', borderLeft: '4px solid #6366f1' }}>
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 rounded-full mt-0.5" style={{ backgroundColor: '#e0e7ff', color: '#4f46e5' }}>
+            <div style={{
+                backgroundColor: '#ffffff',
+                borderLeft: '4px solid #6366f1',
+                padding: '16px',
+                borderRadius: '12px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                marginBottom: '16px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <div style={{ backgroundColor: '#e0e7ff', color: '#4f46e5', padding: '6px', borderRadius: '99px', marginTop: '2px' }}>
                   <Quote size={16} />
                 </div>
-                <div className="space-y-1">
-                  <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: '#111827' }}>Koç Stratejisi</h2>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#374151' }}>
+                <div style={{ flex: 1 }}>
+                  <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0' }}>
+                    Koç Stratejisi
+                  </h2>
+                  <p style={{ fontSize: '14px', lineHeight: '1.5', color: '#374151', margin: 0, whiteSpace: 'pre-wrap' }}>
                     {advice}
                   </p>
                 </div>
@@ -284,52 +334,83 @@ export default function PlannerPage() {
           )}
 
           {/* 3. PROGRAM GRID */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)', // 4 Kolon (PDF için zorlandı)
+              gap: '12px'
+          }}>
             {scheduleList.map((dayPlan, idx) => (
-              <div key={idx} className="rounded-lg shadow-sm border overflow-hidden flex flex-col"
-                   style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
-                <div className="p-2 border-b font-bold text-center uppercase tracking-wide text-xs"
-                     style={{ backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', color: '#374151' }}>
+              <div key={idx} style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column'
+              }}>
+                <div style={{
+                    backgroundColor: '#f3f4f6',
+                    borderBottom: '1px solid #e5e7eb',
+                    padding: '8px',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    textTransform: 'uppercase',
+                    fontSize: '12px',
+                    color: '#374151'
+                }}>
                     {dayPlan.day}
                 </div>
-                <div className="p-2 space-y-1 flex-1">
-                  {dayPlan.blocks.length === 0 ? <p className="text-center text-xs py-2" style={{ color: '#9ca3af' }}>-</p> : dayPlan.blocks.map((block, bIdx) => {
+                <div style={{ padding: '8px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {dayPlan.blocks.length === 0 ?
+                    <p style={{ textAlign: 'center', fontSize: '12px', color: '#9ca3af', padding: '8px 0' }}>-</p>
+                    :
+                    dayPlan.blocks.map((block, bIdx) => {
 
                     const isBreak = block.type === 'break';
-                    let boxStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px' };
                     let displayActivity = block.activity;
+                    // Varsayılan Stil (Ders)
+                    let bg = '#eff6ff'; // Mavi
+                    let border = '#dbeafe';
+                    let text = '#1e3a8a';
+                    let weight = '600';
 
-                    // NOT: Renkleri Tailwind class'ı ile değil, HEX kodu ile veriyoruz.
-                    // oklch hatasını önlemek için bu şart.
                     if (isBreak) {
-                        // Mola (Yeşilimsi)
-                        boxStyle = { ...boxStyle, backgroundColor: '#f0fdf4', color: '#15803d', justifyContent: 'center', border: 'none', fontSize: '10px' };
+                        bg = '#f0fdf4'; // Yeşil
+                        border = 'transparent';
+                        text = '#15803d';
                         displayActivity = getDurationText(block.start, block.end);
-                    } else if (block.type === 'lesson') {
-                        // Ders (Mavi)
-                        boxStyle = { ...boxStyle, backgroundColor: '#eff6ff', color: '#1e3a8a', borderColor: '#dbeafe', borderStyle: 'solid', borderWidth: '1px', fontWeight: '600' };
-                    }
-                    else if (block.type === 'school') {
-                        // Okul (Turuncu)
-                        boxStyle = { ...boxStyle, backgroundColor: '#fff7ed', color: '#9a3412', borderColor: '#ffedd5', borderStyle: 'solid', borderWidth: '1px' };
-                    }
-                    else if (block.type === 'course' || block.type === 'bilsem') {
-                        // Kurs (Mor)
-                        boxStyle = { ...boxStyle, backgroundColor: '#faf5ff', color: '#6b21a8', borderColor: '#f3e8ff', borderStyle: 'solid', borderWidth: '1px' };
-                    }
-                    else if (block.type === 'activity') {
-                        // Aktivite (Pembe)
-                        boxStyle = { ...boxStyle, backgroundColor: '#fdf2f8', color: '#9d174d', borderColor: '#fce7f3', borderStyle: 'solid', borderWidth: '1px' };
-                    } else {
-                        // Varsayılan (Gri)
-                        boxStyle = { ...boxStyle, backgroundColor: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb' };
+                        weight = 'normal';
+                    } else if (block.type === 'school') {
+                        bg = '#fff7ed'; // Turuncu
+                        border = '#ffedd5';
+                        text = '#9a3412';
+                    } else if (block.type === 'course' || block.type === 'bilsem') {
+                        bg = '#faf5ff'; // Mor
+                        border = '#f3e8ff';
+                        text = '#6b21a8';
+                    } else if (block.type === 'activity') {
+                        bg = '#fdf2f8'; // Pembe
+                        border = '#fce7f3';
+                        text = '#9d174d';
                     }
 
                     return (
-                      <div key={bIdx} className={`px-2 py-1.5 rounded text-xs ${isBreak ? 'py-0.5 min-h-[20px]' : ''}`} style={boxStyle}>
-                        <div className={`flex-1 ${isBreak ? 'text-center' : ''}`}>
-                          <div className="leading-tight">{displayActivity}</div>
-                          {!isBreak && <div className="text-[9px] font-medium" style={{ opacity: 0.7 }}>{block.start}-{block.end}</div>}
+                      <div key={bIdx} style={{
+                          backgroundColor: bg,
+                          border: `1px solid ${border}`,
+                          color: text,
+                          padding: '6px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          minHeight: isBreak ? '20px' : 'auto',
+                          justifyContent: isBreak ? 'center' : 'flex-start'
+                      }}>
+                        <div style={{ flex: 1, textAlign: isBreak ? 'center' : 'left' }}>
+                          <div style={{ lineHeight: '1.2', fontWeight: weight }}>{displayActivity}</div>
+                          {!isBreak && <div style={{ fontSize: '9px', fontWeight: '500', opacity: 0.7, marginTop: '2px' }}>{block.start}-{block.end}</div>}
                         </div>
                       </div>
                     );
