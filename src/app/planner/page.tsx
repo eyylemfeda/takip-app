@@ -9,7 +9,7 @@ import {
   Target, School, Coffee, Trophy, Percent, Download, Loader2
 } from 'lucide-react';
 import Link from 'next/link';
-import html2canvas from 'html2canvas-pro';
+import html2canvas from 'html2canvas-pro'; // Pro versiyon
 import jsPDF from 'jspdf';
 
 /* ========= TİPLER ========= */
@@ -78,7 +78,7 @@ export default function PlannerPage() {
   };
 
   /* ======================================================== */
-  /* PDF İNDİRME FONKSİYONU (SON ÇÖZÜM: CLASS TEMİZLİĞİ)      */
+  /* PDF İNDİRME (YATAY A4 - 7 SÜTUN DÜZENİ)                  */
   /* ======================================================== */
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
@@ -88,14 +88,12 @@ export default function PlannerPage() {
     const originalStyle = element.style.cssText;
 
     try {
-      // 1. Görünümü Hazırla
-      element.style.width = '1400px';
+      // 1. A4 Yatay için geniş bir alan tanımlıyoruz (1600px ideal)
+      element.style.width = '1600px';
       element.style.padding = '30px';
       element.style.backgroundColor = '#ffffff';
-      element.style.color = '#000000';
-      element.style.fontFamily = 'Arial, sans-serif';
 
-      // 2. Fotoğraf Çek (onclone İle Temizlik Yaparak)
+      // 2. Fotoğrafı Çek
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -103,32 +101,14 @@ export default function PlannerPage() {
         logging: false,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: 1400,
-        ignoreElements: (node) => node.nodeName === 'svg', // İkonları yoksay (Garanti olsun)
-
-        // --- KRİTİK ÇÖZÜM: 'oklch' HATASINI ENGELLEMEK İÇİN ---
-        onclone: (clonedDoc) => {
-            // Kopyalanan dökümandaki hedef elementi bul
-            const clonedElement = clonedDoc.querySelector('[data-print-target="true"]');
-            if (clonedElement) {
-                // Tailwind classlarını tamamen sil.
-                // Böylece 'oklch' renklerini içeren global stiller devre dışı kalır.
-                // Sadece bizim verdiğimiz inline style'lar kalır.
-                const allElements = clonedElement.querySelectorAll('*');
-                allElements.forEach((el) => {
-                    el.removeAttribute('class');
-                });
-                clonedElement.removeAttribute('class');
-            }
-        }
+        windowWidth: 1600
       });
 
-      // 3. Stili geri al
       element.style.cssText = originalStyle;
 
-      // 4. PDF Oluştur
+      // 3. PDF Oluştur
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('l', 'mm', 'a4');
+      const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -139,6 +119,7 @@ export default function PlannerPage() {
       let finalHeight = imgHeight;
       let finalWidth = pdfWidth;
 
+      // Sayfaya sığdırma hesabı
       if (imgHeight > pdfHeight) {
           const ratio = pdfHeight / imgHeight;
           finalHeight = pdfHeight - 10;
@@ -155,7 +136,7 @@ export default function PlannerPage() {
 
     } catch (error) {
       console.error('PDF Hatası:', error);
-      alert('PDF oluşturulamadı. Lütfen tekrar deneyin.');
+      alert('PDF oluşturulamadı.');
     } finally {
       if (printRef.current) printRef.current.style.cssText = originalStyle;
       setIsDownloading(false);
@@ -174,11 +155,15 @@ export default function PlannerPage() {
       const [h1, m1] = start.split(':').map(Number);
       const [h2, m2] = end.split(':').map(Number);
       const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
-      return `${diff} dk Mola`;
+      return `${diff} dk`; // 'dk Mola' yerine sadece 'dk' yazalım, daha sığsın
     } catch (e) { return 'Mola'; }
   };
 
   const scheduleList = getScheduleList();
+
+  // Günleri Hafta İçi ve Hafta Sonu diye ayıralım
+  const weekDays = scheduleList.slice(0, 5); // Pazartesi - Cuma
+  const weekendDays = scheduleList.slice(5, 7); // Cumartesi - Pazar
 
   let advice = plan?.weekly_schedule?.expert_advice || "";
   const schoolNameSimple = plan?.target_details?.school_name?.split(' ')[0];
@@ -192,6 +177,72 @@ export default function PlannerPage() {
       percentile: plan.target_details.percentile || plan.target_details.estimated_percentile,
       motivation: plan.target_details.motivation
   } : null;
+
+  // --- KUTU ÇİZME YARDIMCISI (Kod tekrarını azaltmak için) ---
+  const renderDayColumn = (dayPlan: DaySchedule, isWeekend = false) => (
+    <div key={dayPlan.day} style={{
+        backgroundColor: '#ffffff',
+        border: '1px solid #e5e7eb',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%' // Yüksekliği fulle
+    }}>
+      <div style={{
+          backgroundColor: isWeekend ? '#f3e8ff' : '#f3f4f6',
+          borderBottom: '1px solid #e5e7eb',
+          padding: '6px',
+          fontWeight: 'bold',
+          textAlign: 'center',
+          textTransform: 'uppercase',
+          fontSize: '11px',
+          color: isWeekend ? '#6b21a8' : '#374151'
+      }}>
+          {dayPlan.day}
+      </div>
+      <div style={{ padding: '6px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {dayPlan.blocks.length === 0 ?
+          <p style={{ textAlign: 'center', fontSize: '12px', color: '#9ca3af', padding: '8px 0' }}>-</p>
+          :
+          dayPlan.blocks.map((block, bIdx) => {
+            const isBreak = block.type === 'break';
+            let bg = '#eff6ff'; let border = '#dbeafe'; let text = '#1e3a8a'; let weight = '600';
+            let displayActivity = block.activity;
+
+            if (isBreak) {
+                bg = '#f0fdf4'; border = 'transparent'; text = '#15803d';
+                displayActivity = getDurationText(block.start, block.end) + ' Mola';
+                weight = 'normal';
+            } else if (block.type === 'school') {
+                bg = '#fff7ed'; border = '#ffedd5'; text = '#9a3412';
+            } else if (block.type === 'course' || block.type === 'bilsem') {
+                bg = '#faf5ff'; border = '#f3e8ff'; text = '#6b21a8';
+            } else if (block.type === 'activity') {
+                bg = '#fdf2f8'; border = '#fce7f3'; text = '#9d174d';
+            }
+
+            return (
+              <div key={bIdx} style={{
+                  backgroundColor: bg,
+                  border: `1px solid ${border}`,
+                  color: text,
+                  padding: isBreak ? '2px' : '4px 6px',
+                  borderRadius: '4px',
+                  fontSize: isBreak ? '9px' : '10px',
+                  textAlign: 'center',
+                  minHeight: isBreak ? '16px' : 'auto'
+              }}>
+                <div style={{ lineHeight: '1.2', fontWeight: weight, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {displayActivity}
+                </div>
+                {!isBreak && <div style={{ fontSize: '8px', fontWeight: '500', opacity: 0.7 }}>{block.start}-{block.end}</div>}
+              </div>
+            );
+        })}
+      </div>
+    </div>
+  );
 
   if (authLoading || loading) return <div className="p-8 text-center">Programın yükleniyor...</div>;
 
@@ -217,223 +268,92 @@ export default function PlannerPage() {
             <Calendar className="text-blue-600" /> Haftalık Planım
          </h2>
          <div className="flex gap-2 w-full sm:w-auto">
-            <button
-                onClick={handleDownloadPDF}
-                disabled={isDownloading}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-all shadow-sm disabled:opacity-70"
-            >
+            <button onClick={handleDownloadPDF} disabled={isDownloading} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-all shadow-sm disabled:opacity-70">
                 {isDownloading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
                 {isDownloading ? 'Hazırlanıyor...' : 'PDF İndir (A4)'}
             </button>
-            <Link href="/planner/create" className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors flex items-center justify-center">
-                Yenile
-            </Link>
-            <button onClick={deletePlan} className="px-3 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium border border-red-100 flex items-center justify-center">
-                <Trash2 size={18} />
-            </button>
+            <Link href="/planner/create" className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors flex items-center justify-center">Yenile</Link>
+            <button onClick={deletePlan} className="px-3 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium border border-red-100 flex items-center justify-center"><Trash2 size={18} /></button>
          </div>
       </div>
 
       {/* --- YAZDIRILACAK ALAN --- */}
-      {/* data-print-target="true" etiketi eklendi. onclone burayı bulup temizleyecek. */}
-      <div
-        ref={printRef}
-        data-print-target="true"
-        style={{
-            backgroundColor: '#f9fafb',
-            padding: '16px',
-            borderRadius: '12px',
-            color: '#000000'
-        }}
-      >
+      <div ref={printRef} style={{ backgroundColor: '#ffffff', padding: '20px', borderRadius: '12px', color: '#000000' }}>
 
-          {/* 1. HEDEF BİLGİSİ */}
+          {/* 1. ORTADA HEDEF OKUL (VE BİLGİLER) */}
           {target && (
-            <div style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '12px',
-                padding: '20px',
-                marginBottom: '16px',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <span style={{
-                                backgroundColor: '#dbeafe',
-                                color: '#1d4ed8',
-                                fontSize: '10px',
-                                fontWeight: 'bold',
-                                padding: '2px 8px',
-                                borderRadius: '99px',
-                                display: 'flex', alignItems: 'center', gap: '4px'
-                            }}>
-                                🎯 HEDEFİM
-                            </span>
+            <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #f3f4f6', paddingBottom: '15px' }}>
+                {/* Okul Adı */}
+                <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '-0.5px' }}>
+                    {target.name.split('(')[0].trim()}
+                </h1>
+
+                {/* Puan ve Dilim (Okulun altında) */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '10px' }}>
+                    {target.score && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#4b5563' }}>
+                            <Trophy size={16} color="#ea580c" />
+                            <span style={{ fontWeight: 'bold', color: '#1f2937' }}>{target.score}</span> Puan
                         </div>
-                        <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0, lineHeight: 1.2 }}>
-                            {target.name.split('(')[0].trim()}
-                        </h1>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', fontSize: '14px' }}>
-                            {target.score && (
-                                <div style={{
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    padding: '4px 8px', borderRadius: '6px',
-                                    backgroundColor: '#ffedd5', border: '1px solid #fed7aa', color: '#374151'
-                                }}>
-                                    <span>🏆</span>
-                                    <span style={{ fontWeight: 'bold' }}>{target.score}</span>
-                                    <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', color: '#6b7280' }}>Puan</span>
-                                </div>
-                            )}
-                            {target.percentile && (
-                                <div style={{
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    padding: '4px 8px', borderRadius: '6px',
-                                    backgroundColor: '#eff6ff', border: '1px solid #dbeafe', color: '#374151'
-                                }}>
-                                    <span>📊</span>
-                                    <span style={{ fontWeight: 'bold' }}>%{target.percentile}</span>
-                                    <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', color: '#6b7280' }}>Dilim</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    {target.motivation && (
-                        <div style={{
-                            backgroundColor: '#eef2ff',
-                            border: '1px solid #e0e7ff',
-                            padding: '12px',
-                            borderRadius: '8px',
-                            maxWidth: '400px',
-                            display: 'none' // Mobilde gizli
-                        }} className="hidden md:block">
-                            <p style={{ fontSize: '14px', fontStyle: 'italic', fontWeight: '500', color: '#312e81', margin: 0 }}>
-                                "{target.motivation}"
-                            </p>
+                    )}
+                    {target.percentile && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#4b5563' }}>
+                            <Percent size={16} color="#2563eb" />
+                            <span style={{ fontWeight: 'bold', color: '#1f2937' }}>%{target.percentile}</span> Dilim
                         </div>
                     )}
                 </div>
             </div>
           )}
 
-          {/* 2. UZMAN GÖRÜŞÜ */}
-          {advice && (
-            <div style={{
-                backgroundColor: '#ffffff',
-                borderLeft: '4px solid #6366f1',
-                padding: '16px',
-                borderRadius: '12px',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                marginBottom: '16px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <div style={{ fontSize: '20px', marginTop: '-4px' }}>💬</div>
-                <div style={{ flex: 1 }}>
-                  <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0' }}>
-                    Koç Stratejisi
-                  </h2>
-                  <p style={{ fontSize: '14px', lineHeight: '1.5', color: '#374151', margin: 0, whiteSpace: 'pre-wrap' }}>
-                    {advice}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* 2. PROGRAM GRID'İ (7 GÜN YANYANA) */}
+          {/* Flexbox ile İkiye Bölüyoruz: Hafta İçi (5) | Hafta Sonu (2) */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }}>
 
-          {/* 3. PROGRAM GRID */}
-          <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '12px'
-          }}>
-            {scheduleList.map((dayPlan, idx) => (
-              <div key={idx} style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column'
-              }}>
-                <div style={{
-                    backgroundColor: '#f3f4f6',
-                    borderBottom: '1px solid #e5e7eb',
-                    padding: '8px',
-                    fontWeight: 'bold',
-                    textAlign: 'center',
-                    textTransform: 'uppercase',
-                    fontSize: '12px',
-                    color: '#374151'
-                }}>
-                    {dayPlan.day}
-                </div>
-                <div style={{ padding: '8px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {dayPlan.blocks.length === 0 ?
-                    <p style={{ textAlign: 'center', fontSize: '12px', color: '#9ca3af', padding: '8px 0' }}>-</p>
-                    :
-                    dayPlan.blocks.map((block, bIdx) => {
+              {/* SOL SÜTUN: HAFTA İÇİ (5 GÜN) + STRATEJİ */}
+              <div style={{ flex: 5, display: 'flex', flexDirection: 'column', gap: '15px' }}>
 
-                    const isBreak = block.type === 'break';
-                    let displayActivity = block.activity;
-                    // Varsayılan Stil
-                    let bg = '#eff6ff'; // Mavi
-                    let border = '#dbeafe';
-                    let text = '#1e3a8a';
-                    let weight = '600';
-                    let emoji = '📘';
+                  {/* Hafta İçi Günleri (5 Yan Yana) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+                      {weekDays.map(day => renderDayColumn(day))}
+                  </div>
 
-                    if (isBreak) {
-                        bg = '#f0fdf4'; // Yeşil
-                        border = 'transparent';
-                        text = '#15803d';
-                        displayActivity = getDurationText(block.start, block.end);
-                        weight = 'normal';
-                        emoji = '';
-                    } else if (block.type === 'school') {
-                        bg = '#fff7ed'; // Turuncu
-                        border = '#ffedd5';
-                        text = '#9a3412';
-                        emoji = '🏫';
-                    } else if (block.type === 'course' || block.type === 'bilsem') {
-                        bg = '#faf5ff'; // Mor
-                        border = '#f3e8ff';
-                        text = '#6b21a8';
-                        emoji = '📚';
-                    } else if (block.type === 'activity') {
-                        bg = '#fdf2f8'; // Pembe
-                        border = '#fce7f3';
-                        text = '#9d174d';
-                        emoji = '🎨';
-                    }
-
-                    return (
-                      <div key={bIdx} style={{
-                          backgroundColor: bg,
-                          border: `1px solid ${border}`,
-                          color: text,
-                          padding: '6px 8px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          minHeight: isBreak ? '20px' : 'auto',
-                          justifyContent: isBreak ? 'center' : 'flex-start'
-                      }}>
-                        {emoji && <span style={{ fontSize: '14px', lineHeight: 1 }}>{emoji}</span>}
-                        <div style={{ flex: 1, textAlign: isBreak ? 'center' : 'left' }}>
-                          <div style={{ lineHeight: '1.2', fontWeight: weight }}>{displayActivity}</div>
-                          {!isBreak && <div style={{ fontSize: '9px', fontWeight: '500', opacity: 0.7, marginTop: '2px' }}>{block.start}-{block.end}</div>}
-                        </div>
+                  {/* Koç Stratejisi (Hafta içinin altına) */}
+                  {advice && (
+                    <div style={{
+                        flex: 1, // Kalan boşluğu doldur
+                        backgroundColor: '#f5f3ff',
+                        border: '1px solid #ddd6fe',
+                        borderRadius: '8px',
+                        padding: '15px',
+                        display: 'flex',
+                        gap: '12px'
+                    }}>
+                      <div style={{ marginTop: '2px' }}><Quote size={24} color="#7c3aed" /></div>
+                      <div>
+                        <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#5b21b6', margin: '0 0 6px 0' }}>
+                          Haftalık Koç Stratejisi
+                        </h2>
+                        <p style={{ fontSize: '12px', lineHeight: '1.5', color: '#4c1d95', margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {advice}
+                        </p>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  )}
               </div>
-            ))}
+
+              {/* SAĞ SÜTUN: HAFTA SONU (2 GÜN) - UZUNLAMASINA */}
+              <div style={{ flex: 2, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                  {weekendDays.map(day => renderDayColumn(day, true))}
+              </div>
+
           </div>
+
+          {/* Alt Bilgi */}
+          <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '10px', color: '#9ca3af' }}>
+             DersTakibim.com AI tarafından oluşturulmuştur.
+          </div>
+
       </div>
       {/* --- YAZDIRILACAK ALAN BİTİŞİ --- */}
 
