@@ -9,7 +9,7 @@ import {
   Target, School, Coffee, Trophy, Percent, Download, Loader2
 } from 'lucide-react';
 import Link from 'next/link';
-import html2canvas from 'html2canvas-pro'; // Pro versiyon
+import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 
 /* ========= TİPLER ========= */
@@ -50,6 +50,7 @@ export default function PlannerPage() {
   const [loading, setLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // PDF için gizli alanı referans alacağız
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,22 +79,16 @@ export default function PlannerPage() {
   };
 
   /* ======================================================== */
-  /* PDF İNDİRME (YATAY A4 - 7 SÜTUN DÜZENİ)                  */
+  /* PDF İNDİRME (GİZLİ ALANIN FOTOĞRAFINI ÇEKER)             */
   /* ======================================================== */
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
     setIsDownloading(true);
 
     const element = printRef.current;
-    const originalStyle = element.style.cssText;
 
     try {
-      // 1. A4 Yatay için geniş bir alan tanımlıyoruz (1600px ideal)
-      element.style.width = '1600px';
-      element.style.padding = '30px';
-      element.style.backgroundColor = '#ffffff';
-
-      // 2. Fotoğrafı Çek
+      // 1. Gizli alanın fotoğrafını çek
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -101,12 +96,10 @@ export default function PlannerPage() {
         logging: false,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: 1600
+        windowWidth: 1600 // Geniş pencere simülasyonu
       });
 
-      element.style.cssText = originalStyle;
-
-      // 3. PDF Oluştur
+      // 2. PDF Oluştur
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape
 
@@ -119,7 +112,6 @@ export default function PlannerPage() {
       let finalHeight = imgHeight;
       let finalWidth = pdfWidth;
 
-      // Sayfaya sığdırma hesabı
       if (imgHeight > pdfHeight) {
           const ratio = pdfHeight / imgHeight;
           finalHeight = pdfHeight - 10;
@@ -138,7 +130,6 @@ export default function PlannerPage() {
       console.error('PDF Hatası:', error);
       alert('PDF oluşturulamadı.');
     } finally {
-      if (printRef.current) printRef.current.style.cssText = originalStyle;
       setIsDownloading(false);
     }
   };
@@ -155,15 +146,15 @@ export default function PlannerPage() {
       const [h1, m1] = start.split(':').map(Number);
       const [h2, m2] = end.split(':').map(Number);
       const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
-      return `${diff} dk`; // 'dk Mola' yerine sadece 'dk' yazalım, daha sığsın
+      return `${diff} dk Mola`;
     } catch (e) { return 'Mola'; }
   };
 
   const scheduleList = getScheduleList();
 
-  // Günleri Hafta İçi ve Hafta Sonu diye ayıralım
-  const weekDays = scheduleList.slice(0, 5); // Pazartesi - Cuma
-  const weekendDays = scheduleList.slice(5, 7); // Cumartesi - Pazar
+  // PDF Düzeni İçin Günleri Ayır
+  const weekDays = scheduleList.slice(0, 5);
+  const weekendDays = scheduleList.slice(5, 7);
 
   let advice = plan?.weekly_schedule?.expert_advice || "";
   const schoolNameSimple = plan?.target_details?.school_name?.split(' ')[0];
@@ -178,8 +169,8 @@ export default function PlannerPage() {
       motivation: plan.target_details.motivation
   } : null;
 
-  // --- KUTU ÇİZME YARDIMCISI (Kod tekrarını azaltmak için) ---
-  const renderDayColumn = (dayPlan: DaySchedule, isWeekend = false) => (
+  // --- PDF KUTU ÇİZME YARDIMCISI ---
+  const renderPdfDayColumn = (dayPlan: DaySchedule, isWeekend = false) => (
     <div key={dayPlan.day} style={{
         backgroundColor: '#ffffff',
         border: '1px solid #e5e7eb',
@@ -187,7 +178,7 @@ export default function PlannerPage() {
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        height: '100%' // Yüksekliği fulle
+        height: '100%'
     }}>
       <div style={{
           backgroundColor: isWeekend ? '#f3e8ff' : '#f3f4f6',
@@ -212,7 +203,13 @@ export default function PlannerPage() {
 
             if (isBreak) {
                 bg = '#f0fdf4'; border = 'transparent'; text = '#15803d';
-                displayActivity = getDurationText(block.start, block.end) + ' Mola';
+                // PDF'te sadece "10 dk" yazsın, yer kazanalım
+                try {
+                    const [h1, m1] = block.start.split(':').map(Number);
+                    const [h2, m2] = block.end.split(':').map(Number);
+                    const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+                    displayActivity = `${diff} dk Mola`;
+                } catch { displayActivity = 'Mola'; }
                 weight = 'normal';
             } else if (block.type === 'school') {
                 bg = '#fff7ed'; border = '#ffedd5'; text = '#9a3412';
@@ -260,9 +257,12 @@ export default function PlannerPage() {
   }
 
   return (
-    <main className="space-y-6 pb-10">
+    <main className="space-y-6 pb-10 relative">
 
-      {/* ÜST BAR */}
+      {/* ======================================================== */}
+      {/* 1. EKRANDA GÖRÜNEN KISIM (WEB ARAYÜZÜ - RESPONSIVE)      */}
+      {/* ======================================================== */}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Calendar className="text-blue-600" /> Haftalık Planım
@@ -277,85 +277,165 @@ export default function PlannerPage() {
          </div>
       </div>
 
-      {/* --- YAZDIRILACAK ALAN --- */}
-      <div ref={printRef} style={{ backgroundColor: '#ffffff', padding: '20px', borderRadius: '12px', color: '#000000' }}>
-
-          {/* 1. ORTADA HEDEF OKUL (VE BİLGİLER) */}
+      {/* --- NORMAL GÖRÜNÜM BAŞLANGICI --- */}
+      <div className="space-y-6">
+          {/* HEDEF BİLGİSİ */}
           {target && (
-            <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #f3f4f6', paddingBottom: '15px' }}>
-                {/* Okul Adı */}
-                <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '-0.5px' }}>
-                    {target.name.split('(')[0].trim()}
-                </h1>
-
-                {/* Puan ve Dilim (Okulun altında) */}
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '10px' }}>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                    <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Target size={12} /> HEDEFİM
+                    </span>
+                    </div>
+                    <h1 className="text-2xl font-bold text-gray-800 tracking-tight leading-tight">
+                        {target.name.split('(')[0].trim()}
+                    </h1>
+                    <div className="flex items-center gap-3 mt-3 text-sm">
                     {target.score && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#4b5563' }}>
-                            <Trophy size={16} color="#ea580c" />
-                            <span style={{ fontWeight: 'bold', color: '#1f2937' }}>{target.score}</span> Puan
+                        <div className="flex items-center gap-1.5 text-gray-700 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100">
+                        <Trophy size={16} className="text-orange-600" />
+                        <span className="font-bold">{target.score}</span>
+                        <span className="text-gray-500 text-xs uppercase font-semibold">Puan</span>
                         </div>
                     )}
                     {target.percentile && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#4b5563' }}>
-                            <Percent size={16} color="#2563eb" />
-                            <span style={{ fontWeight: 'bold', color: '#1f2937' }}>%{target.percentile}</span> Dilim
+                        <div className="flex items-center gap-1.5 text-gray-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                        <Percent size={16} className="text-blue-600" />
+                        <span className="font-bold">%{target.percentile}</span>
+                        <span className="text-gray-500 text-xs uppercase font-semibold">Dilim</span>
                         </div>
                     )}
+                    </div>
+                </div>
+                {target.motivation && (
+                    <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-4 rounded-xl max-w-md shadow-sm">
+                    <p className="text-sm text-indigo-900 italic font-medium leading-relaxed">"{target.motivation}"</p>
+                    </div>
+                )}
                 </div>
             </div>
           )}
 
-          {/* 2. PROGRAM GRID'İ (7 GÜN YANYANA) */}
-          {/* Flexbox ile İkiye Bölüyoruz: Hafta İçi (5) | Hafta Sonu (2) */}
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }}>
+          {/* UZMAN GÖRÜŞÜ */}
+          {advice && (
+            <div className="bg-white p-6 rounded-xl border-l-4 border-indigo-500 shadow-sm relative overflow-hidden">
+              <div className="flex items-start gap-4 relative z-10">
+                <div className="p-2 bg-indigo-100 rounded-full text-indigo-600 shrink-0 mt-1"><Quote size={20} /></div>
+                <div className="space-y-2">
+                  <h2 className="text-lg font-bold text-gray-900">Haftalık Koç Stratejisi</h2>
+                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{advice}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-              {/* SOL SÜTUN: HAFTA İÇİ (5 GÜN) + STRATEJİ */}
-              <div style={{ flex: 5, display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          {/* PROGRAM GRID (RESPONSIVE) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {scheduleList.map((dayPlan, idx) => (
+              <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow duration-300">
+                <div className="bg-gray-50/80 p-3 border-b border-gray-100 font-bold text-gray-700 text-center uppercase tracking-wide text-xs">
+                    {dayPlan.day}
+                </div>
+                <div className="p-2 space-y-1.5 flex-1">
+                  {dayPlan.blocks.length === 0 ? <p className="text-center text-gray-400 text-sm py-4">Boş gün 🎉</p> : dayPlan.blocks.map((block, bIdx) => {
+                    const isBreak = block.type === 'break';
+                    let colorClass = "bg-gray-50 border-gray-100 text-gray-600";
+                    let icon = <Clock size={14} />;
+                    let displayActivity = block.activity;
+                    let displayTime = `${block.start} - ${block.end}`;
 
-                  {/* Hafta İçi Günleri (5 Yan Yana) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
-                      {weekDays.map(day => renderDayColumn(day))}
+                    if (isBreak) {
+                        colorClass = "bg-green-50/50 border-green-100/50 text-green-700/70 text-xs border-0 justify-center";
+                        icon = <Coffee size={12} className="hidden" />;
+                        displayActivity = getDurationText(block.start, block.end);
+                        displayTime = "";
+                    } else if (block.type === 'lesson') {
+                        colorClass = "bg-blue-50 border-blue-100 text-blue-900 shadow-sm"; icon = <BookOpen size={14} className="text-blue-500" />;
+                    } else if (block.type === 'school') {
+                        colorClass = "bg-orange-50 border-orange-100 text-orange-900"; icon = <School size={14} className="text-orange-500" />;
+                    } else if (block.type === 'course' || block.type === 'bilsem') {
+                        colorClass = "bg-purple-50 border-purple-100 text-purple-900"; icon = <MapPin size={14} className="text-purple-500" />;
+                    } else if (block.type === 'activity') {
+                        colorClass = "bg-pink-50 border-pink-100 text-pink-900"; icon = <Clock size={14} className="text-pink-500" />;
+                    }
+
+                    return (
+                      <div key={bIdx} className={`px-3 py-2 rounded-lg border text-sm flex gap-3 items-center ${colorClass} ${isBreak ? 'py-1 min-h-[24px]' : ''}`}>
+                        {!isBreak && <div className="shrink-0">{icon}</div>}
+                        <div className={`flex-1 ${isBreak ? 'text-center font-medium' : ''}`}>
+                          <div className={isBreak ? '' : 'font-semibold leading-tight'}>{displayActivity}</div>
+                          {!isBreak && <div className="text-[10px] opacity-70 mt-0.5 font-medium">{displayTime}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+      </div>
+      {/* --- NORMAL GÖRÜNÜM BİTİŞİ --- */}
+
+
+      {/* ======================================================== */}
+      {/* 2. PDF İÇİN GİZLİ ALAN (KULLANICI GÖRMEZ)                */}
+      {/* ======================================================== */}
+      <div style={{ position: 'fixed', top: '-10000px', left: '-10000px', width: '1600px', zIndex: -1000 }}>
+          <div ref={printRef} style={{ backgroundColor: '#ffffff', padding: '20px', borderRadius: '12px', color: '#000000' }}>
+
+              {/* ORTA HEDEF */}
+              {target && (
+                <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #f3f4f6', paddingBottom: '15px' }}>
+                    <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '-0.5px' }}>
+                        {target.name.split('(')[0].trim()}
+                    </h1>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '10px' }}>
+                        {target.score && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#4b5563' }}>
+                                <Trophy size={16} color="#ea580c" /> <span style={{ fontWeight: 'bold', color: '#1f2937' }}>{target.score}</span> Puan
+                            </div>
+                        )}
+                        {target.percentile && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#4b5563' }}>
+                                <Percent size={16} color="#2563eb" /> <span style={{ fontWeight: 'bold', color: '#1f2937' }}>%{target.percentile}</span> Dilim
+                            </div>
+                        )}
+                    </div>
+                </div>
+              )}
+
+              {/* FLEX YAPISI: SOL (5 Gün + Strateji) | SAĞ (2 Gün) */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }}>
+
+                  {/* SOL SÜTUN */}
+                  <div style={{ flex: 5, display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+                          {weekDays.map(day => renderPdfDayColumn(day))}
+                      </div>
+
+                      {/* Strateji Kutusu */}
+                      {advice && (
+                        <div style={{ flex: 1, backgroundColor: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '8px', padding: '15px', display: 'flex', gap: '12px' }}>
+                          <div style={{ marginTop: '2px' }}><Quote size={24} color="#7c3aed" /></div>
+                          <div>
+                            <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#5b21b6', margin: '0 0 6px 0' }}>Haftalık Koç Stratejisi</h2>
+                            <p style={{ fontSize: '12px', lineHeight: '1.5', color: '#4c1d95', margin: 0, whiteSpace: 'pre-wrap' }}>{advice}</p>
+                          </div>
+                        </div>
+                      )}
                   </div>
 
-                  {/* Koç Stratejisi (Hafta içinin altına) */}
-                  {advice && (
-                    <div style={{
-                        flex: 1, // Kalan boşluğu doldur
-                        backgroundColor: '#f5f3ff',
-                        border: '1px solid #ddd6fe',
-                        borderRadius: '8px',
-                        padding: '15px',
-                        display: 'flex',
-                        gap: '12px'
-                    }}>
-                      <div style={{ marginTop: '2px' }}><Quote size={24} color="#7c3aed" /></div>
-                      <div>
-                        <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#5b21b6', margin: '0 0 6px 0' }}>
-                          Haftalık Koç Stratejisi
-                        </h2>
-                        <p style={{ fontSize: '12px', lineHeight: '1.5', color: '#4c1d95', margin: 0, whiteSpace: 'pre-wrap' }}>
-                          {advice}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                  {/* SAĞ SÜTUN (HAFTA SONU) */}
+                  <div style={{ flex: 2, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                      {weekendDays.map(day => renderPdfDayColumn(day, true))}
+                  </div>
               </div>
 
-              {/* SAĞ SÜTUN: HAFTA SONU (2 GÜN) - UZUNLAMASINA */}
-              <div style={{ flex: 2, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                  {weekendDays.map(day => renderDayColumn(day, true))}
-              </div>
-
+              <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '10px', color: '#9ca3af' }}>DersTakibim.com AI tarafından oluşturulmuştur.</div>
           </div>
-
-          {/* Alt Bilgi */}
-          <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '10px', color: '#9ca3af' }}>
-             DersTakibim.com AI tarafından oluşturulmuştur.
-          </div>
-
       </div>
-      {/* --- YAZDIRILACAK ALAN BİTİŞİ --- */}
 
     </main>
   );
