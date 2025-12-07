@@ -78,7 +78,7 @@ export default function PlannerPage() {
   };
 
   /* ======================================================== */
-  /* PDF İNDİRME FONKSİYONU (SAF CSS İLE FIXLENDİ)            */
+  /* PDF İNDİRME FONKSİYONU (SON FİX: İKON RENKLERİ)          */
   /* ======================================================== */
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
@@ -88,26 +88,25 @@ export default function PlannerPage() {
     const originalStyle = element.style.cssText;
 
     try {
-      // 1. Görünümü PDF için hazırla (A4 Yatay genişliği)
-      // Arkaplanı ve rengi HEX kodu olarak zorla veriyoruz.
+      // 1. Görünümü PDF için hazırla
       element.style.width = '1400px';
       element.style.padding = '30px';
       element.style.backgroundColor = '#ffffff';
       element.style.color = '#000000';
-      element.style.fontFamily = 'Arial, sans-serif'; // Font garantisi
+      element.style.fontFamily = 'Arial, sans-serif';
 
       // 2. Fotoğrafı Çek
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff', // Kesinlikle beyaz
+        backgroundColor: '#ffffff',
         logging: false,
         scrollX: 0,
         scrollY: 0,
         windowWidth: 1400
       });
 
-      // 3. Stili HEMEN eski haline getir (Hata olsa bile arayüz bozulmasın diye try içinde de çağırıyoruz)
+      // 3. Stili HEMEN eski haline getir
       element.style.cssText = originalStyle;
 
       // 4. PDF Oluştur
@@ -116,7 +115,6 @@ export default function PlannerPage() {
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
@@ -141,10 +139,7 @@ export default function PlannerPage() {
       console.error('PDF Hatası:', error);
       alert('PDF oluşturulamadı. Lütfen sayfayı yenileyip tekrar deneyin.');
     } finally {
-      // Her ihtimale karşı stili sıfırla
-      if (printRef.current) {
-          printRef.current.style.cssText = originalStyle;
-      }
+      if (printRef.current) printRef.current.style.cssText = originalStyle;
       setIsDownloading(false);
     }
   };
@@ -222,8 +217,6 @@ export default function PlannerPage() {
       </div>
 
       {/* --- YAZDIRILACAK ALAN --- */}
-      {/* NOT: BURADA TAILWIND CLASS'LARI (border-gray-200 vb) YASAK.
-          HEPSİ style={{...}} İÇİNDE HEX KODU İLE VERİLDİ. OKLCH HATASINI ÇÖZEN TEK YOL BU. */}
       <div
         ref={printRef}
         style={{
@@ -296,7 +289,7 @@ export default function PlannerPage() {
                             padding: '12px',
                             borderRadius: '8px',
                             maxWidth: '400px',
-                            display: 'none' // Mobilde/Dar alanda gizle, PDF'te görünür yapmak için aşağıda CSS trick var ama şimdilik gizli kalsın taşmasın
+                            display: 'none'
                         }} className="hidden md:block">
                             <p style={{ fontSize: '14px', fontStyle: 'italic', fontWeight: '500', color: '#312e81', margin: 0 }}>
                                 "{target.motivation}"
@@ -336,7 +329,7 @@ export default function PlannerPage() {
           {/* 3. PROGRAM GRID */}
           <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)', // 4 Kolon (PDF için zorlandı)
+              gridTemplateColumns: 'repeat(4, 1fr)',
               gap: '12px'
           }}>
             {scheduleList.map((dayPlan, idx) => (
@@ -368,30 +361,37 @@ export default function PlannerPage() {
 
                     const isBreak = block.type === 'break';
                     let displayActivity = block.activity;
-                    // Varsayılan Stil (Ders)
-                    let bg = '#eff6ff'; // Mavi
+
+                    // Varsayılan Stil (Varsayılan Renkler)
+                    let bg = '#eff6ff'; // Mavi (Ders)
                     let border = '#dbeafe';
                     let text = '#1e3a8a';
                     let weight = '600';
+                    let icon = <BookOpen size={14} color="#3b82f6" />; // Varsayılan İkon ve Rengi
 
+                    // --- KRİTİK FİX: BURADAKİ İKONLARA HEX RENK VERİLDİ ---
                     if (isBreak) {
-                        bg = '#f0fdf4'; // Yeşil
+                        bg = '#f0fdf4';
                         border = 'transparent';
                         text = '#15803d';
                         displayActivity = getDurationText(block.start, block.end);
                         weight = 'normal';
+                        icon = null; // Mola ikonu yok
                     } else if (block.type === 'school') {
-                        bg = '#fff7ed'; // Turuncu
+                        bg = '#fff7ed';
                         border = '#ffedd5';
                         text = '#9a3412';
+                        icon = <School size={14} color="#f97316" />; // Turuncu HEX
                     } else if (block.type === 'course' || block.type === 'bilsem') {
-                        bg = '#faf5ff'; // Mor
+                        bg = '#faf5ff';
                         border = '#f3e8ff';
                         text = '#6b21a8';
+                        icon = <MapPin size={14} color="#a855f7" />; // Mor HEX
                     } else if (block.type === 'activity') {
-                        bg = '#fdf2f8'; // Pembe
+                        bg = '#fdf2f8';
                         border = '#fce7f3';
                         text = '#9d174d';
+                        icon = <Clock size={14} color="#ec4899" />; // Pembe HEX
                     }
 
                     return (
@@ -408,6 +408,7 @@ export default function PlannerPage() {
                           minHeight: isBreak ? '20px' : 'auto',
                           justifyContent: isBreak ? 'center' : 'flex-start'
                       }}>
+                        {icon && <div style={{ flexShrink: 0 }}>{icon}</div>}
                         <div style={{ flex: 1, textAlign: isBreak ? 'center' : 'left' }}>
                           <div style={{ lineHeight: '1.2', fontWeight: weight }}>{displayActivity}</div>
                           {!isBreak && <div style={{ fontSize: '9px', fontWeight: '500', opacity: 0.7, marginTop: '2px' }}>{block.start}-{block.end}</div>}
