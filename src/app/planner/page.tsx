@@ -9,7 +9,7 @@ import {
   Target, School, Coffee, Trophy, Percent, Download, Loader2
 } from 'lucide-react';
 import Link from 'next/link';
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 
 /* ========= TİPLER ========= */
