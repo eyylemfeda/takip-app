@@ -420,7 +420,7 @@ function Step1Target({ data, update, onNext }: { data: PlannerData; update: (f: 
 
 
 /* ============================================== */
-/* ADIM 2: ZAMAN                                  */
+/* ADIM 2: ZAMAN (GÜNCELLENDİ)                    */
 /* ============================================== */
 function Step2Time({ data, update, onNext, onBack }: { data: PlannerData; update: (f: Partial<PlannerData>) => void; onNext: () => void; onBack: () => void; }) {
   const isSchoolValid = data.schoolEndTime > data.schoolStartTime;
@@ -428,8 +428,6 @@ function Step2Time({ data, update, onNext, onBack }: { data: PlannerData; update
   const isSatValid = !data.hasSaturdayCourse || (data.saturdayCourseEnd > data.saturdayCourseStart);
   const isSunValid = !data.hasSundayCourse || (data.sundayCourseEnd > data.sundayCourseStart);
   const isBilsemValid = !data.goesToBilsem || (data.bilsemEnd > data.bilsemStart && data.bilsemDays.length > 0);
-
-  // YENİ: Çalışma ve Uyku saatleri validasyonu
   const isSleepValid = data.sleepTime > data.workEndTime;
 
   const isValid = isSchoolValid && isWeekdayCourseValid && isSatValid && isSunValid && isBilsemValid;
@@ -443,6 +441,15 @@ function Step2Time({ data, update, onNext, onBack }: { data: PlannerData; update
       {/* 1. OKUL */}
       <div className="p-5 bg-blue-50 rounded-xl border border-blue-100 space-y-4"><div className="flex items-center gap-2 text-blue-800 font-medium"><School size={20} /><h3>Hafta İçi Okul</h3></div><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-medium text-gray-500 mb-1">Başlangıç</label><input type="time" value={data.schoolStartTime} onChange={(e) => update({ schoolStartTime: e.target.value })} className="w-full p-3 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" /></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Bitiş</label><input type="time" value={data.schoolEndTime} onChange={(e) => update({ schoolEndTime: e.target.value })} className={`w-full p-3 bg-white rounded-lg border focus:ring-2 outline-none cursor-pointer ${!isSchoolValid ? 'border-red-500 ring-red-200' : 'border-gray-200 focus:ring-blue-500'}`} /></div></div>{!isSchoolValid && <p className="text-xs text-red-600">Okul çıkış saati, başlangıçtan önce olamaz.</p>}</div>
 
+      {/* --- YENİ EKLENEN BİLGİ NOTU --- */}
+      <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-lg flex gap-3 items-start">
+        <div className="text-indigo-600 mt-0.5"><BookOpen size={18} /></div>
+        <p className="text-xs text-indigo-800 leading-relaxed">
+          <strong>Dikkat:</strong> Buraya sadece Okul veya Dershane gibi kurumsal/zorunlu saatlerini gir. <br/>
+          Özel derslerini, spor/sanat etkinliklerini veya bireysel rutinlerini <strong>bir sonraki sayfada</strong> detaylıca ekleyeceğiz.
+        </p>
+      </div>
+
       {/* 2. DERSHANE */}
       <div className={`p-5 rounded-xl border transition-all duration-300 ${data.hasWeekdayCourse ? 'bg-indigo-50 border-indigo-100' : 'bg-gray-50 border-gray-200'}`}><div className="flex items-center justify-between mb-4"><div className="flex items-center gap-2 font-medium text-gray-800"><BookOpen size={20} className={data.hasWeekdayCourse ? 'text-indigo-600' : 'text-gray-400'} /><h3>Hafta İçi Kurs / Dershane / Etüt</h3></div><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={data.hasWeekdayCourse} onChange={(e) => update({ hasWeekdayCourse: e.target.checked })} className="sr-only peer" /><div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div></label></div>{data.hasWeekdayCourse && (<div className="grid grid-cols-2 gap-6 animate-in slide-in-from-top-2"><div><label className="block text-xs font-medium text-gray-500 mb-1">Başlangıç</label><input type="time" value={data.weekdayCourseStart} onChange={(e) => update({ weekdayCourseStart: e.target.value })} className="w-full p-3 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer" /></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Bitiş</label><input type="time" value={data.weekdayCourseEnd} onChange={(e) => update({ weekdayCourseEnd: e.target.value })} className={`w-full p-3 bg-white rounded-lg border focus:ring-2 outline-none cursor-pointer ${!isWeekdayCourseValid ? 'border-red-500 ring-red-200' : 'border-gray-200 focus:ring-indigo-500'}`} /></div></div>)}</div>
 
@@ -452,6 +459,7 @@ function Step2Time({ data, update, onNext, onBack }: { data: PlannerData; update
       {/* 4. PAZAR */}
       <div className={`p-5 rounded-xl border transition-all duration-300 ${data.hasSundayCourse ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-200'}`}><div className="flex items-center justify-between mb-4"><div className="flex items-center gap-2 font-medium text-gray-800"><Brain size={20} className={data.hasSundayCourse ? 'text-orange-600' : 'text-gray-400'} /><h3>Pazar Kurs / Dershane / Etüt</h3></div><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={data.hasSundayCourse} onChange={(e) => update({ hasSundayCourse: e.target.checked })} className="sr-only peer" /><div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div></label></div>{data.hasSundayCourse && (<div className="grid grid-cols-2 gap-6 animate-in slide-in-from-top-2"><div><label className="block text-xs font-medium text-gray-500 mb-1">Başlangıç</label><input type="time" value={data.sundayCourseStart} onChange={(e) => update({ sundayCourseStart: e.target.value })} className="w-full p-3 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-orange-500 outline-none cursor-pointer" /></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Bitiş</label><input type="time" value={data.sundayCourseEnd} onChange={(e) => update({ sundayCourseEnd: e.target.value })} className={`w-full p-3 bg-white rounded-lg border focus:ring-2 outline-none cursor-pointer ${!isSunValid ? 'border-red-500 ring-red-200' : 'border-gray-200 focus:ring-orange-500'}`} /></div></div>)}{data.hasSundayCourse && !isSunValid && <p className="text-xs text-red-600 mt-2">Hata: Bitiş saati başlangıçtan önce olamaz.</p>}</div>
 
+      {/* ... (BİLSEM ve Gece Rutini kısımları aynen kalacak, sadece üst kısmı değiştirin) ... */}
       {/* 5. BİLSEM */}
       <div className={`p-5 rounded-xl border transition-all duration-300 ${data.goesToBilsem ? 'bg-purple-50 border-purple-100' : 'bg-gray-50 border-gray-200'}`}><div className="flex items-center justify-between mb-4"><div className="flex items-center gap-2 font-medium text-gray-800"><Atom size={20} className={data.goesToBilsem ? 'text-purple-600' : 'text-gray-400'} /><div><h3>BİLSEM</h3><p className="text-xs text-gray-500 font-normal">Bilim ve Sanat Merkezi</p></div></div><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={data.goesToBilsem} onChange={(e) => update({ goesToBilsem: e.target.checked })} className="sr-only peer" /><div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div></label></div>{data.goesToBilsem && (<div className="space-y-4 animate-in slide-in-from-top-2"><div><label className="block text-xs font-medium text-gray-500 mb-2">Hangi günler gidiyorsun?</label><div className="flex flex-wrap gap-2">{DAYS.map(day => (<button key={day} onClick={() => toggleBilsemDay(day)} className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${data.bilsemDays.includes(day) ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'}`}>{day}</button>))}</div>{data.bilsemDays.length === 0 && <p className="text-xs text-red-500 mt-1">En az bir gün seçmelisin.</p>}</div><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-medium text-gray-500 mb-1">Servise Biniş</label><input type="time" value={data.bilsemStart} onChange={(e) => update({ bilsemStart: e.target.value })} className="w-full p-3 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-purple-500 outline-none cursor-pointer" /></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Eve Dönüş</label><input type="time" value={data.bilsemEnd} onChange={(e) => update({ bilsemEnd: e.target.value })} className="w-full p-3 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-purple-500 outline-none cursor-pointer" /></div></div><p className="text-xs text-purple-600 italic">* Lütfen yol (servis) sürelerini dahil ederek saatleri giriniz.</p></div>)}</div>
 
@@ -559,7 +567,7 @@ function Step3Activities({
 }
 
 /* ============================================== */
-/* ADIM 4: ÇALIŞMA TARZI                          */
+/* ADIM 4: ÇALIŞMA TARZI (GÜNCELLENDİ)            */
 /* ============================================== */
 function Step4Style({
   data,
@@ -607,11 +615,23 @@ function Step4Style({
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
       <div className="space-y-1"><h2 className="text-lg font-semibold text-gray-800">Çalışma Tarzın</h2><p className="text-sm text-gray-500">Son adım! Yapay zeka programını bu bilgilere göre optimize edecek.</p></div>
-      {/* 1. ZORLANDIĞIN DERSLER */}
-      <div className="space-y-3"><h3 className="text-sm font-medium text-gray-700 flex items-center gap-2"><Brain size={18} className="text-purple-600" />Hangi derslerde daha çok zorlanıyorsun?</h3><div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{SUBJECTS.map(sub => (<button key={sub} onClick={() => toggleSubject(sub)} className={`p-3 rounded-xl border text-sm font-medium transition-all ${data.difficultSubjects.includes(sub) ? 'bg-purple-100 border-purple-500 text-purple-800 ring-1 ring-purple-500' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>{sub}</button>))}</div><p className="text-xs text-gray-500">* Bu derslere programda daha fazla ağırlık vereceğiz.</p></div>
-      {/* 2. DERS SIKLIKLARI */}
+
+      {/* 1. AĞIRLIKLI DERSLER (METİN GÜNCELLENDİ) */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <Brain size={18} className="text-purple-600" />
+            Hangi derslere daha çok ağırlık verelim?
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{SUBJECTS.map(sub => (<button key={sub} onClick={() => toggleSubject(sub)} className={`p-3 rounded-xl border text-sm font-medium transition-all ${data.difficultSubjects.includes(sub) ? 'bg-purple-100 border-purple-500 text-purple-800 ring-1 ring-purple-500' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>{sub}</button>))}</div>
+        <p className="text-xs text-gray-500">* Bu dersler programda daha sık yer alacak.</p>
+      </div>
+
+      {/* 2. DERS SIKLIKLARI (METİN GÜNCELLENDİ) */}
       <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
-        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2"><Calendar size={18} className="text-green-600" />Hangi dersi haftada kaç gün çalışmak istersin?</h3>
+        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <Calendar size={18} className="text-green-600" />
+            Hangi dersi haftada en az kaç gün çalışmak istersin?
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SUBJECTS.map(sub => (
             <div key={sub} className="flex items-center justify-between bg-white p-2 rounded-lg border border-gray-200">
@@ -625,6 +645,7 @@ function Step4Style({
           ))}
         </div>
       </div>
+
       {/* 3. ÇALIŞMA TEMPOSU */}
       <div className="space-y-3"><h3 className="text-sm font-medium text-gray-700 flex items-center gap-2"><Clock size={18} className="text-blue-600" />Sana en uygun çalışma temposu hangisi?</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><button onClick={() => update({ studyTempo: '30+10' })} className={`p-4 rounded-xl border-2 text-left transition-all relative ${data.studyTempo === '30+10' ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}><div className="flex justify-between items-start mb-2"><Zap size={24} className={data.studyTempo === '30+10' ? 'text-blue-600' : 'text-gray-400'} />{data.studyTempo === '30+10' && <CheckCircle2 size={20} className="text-blue-600" />}</div><div className="font-bold text-gray-800">30 dk Ders</div><div className="text-sm text-gray-600">+ 10 dk Mola</div></button><button onClick={() => update({ studyTempo: '40+10' })} className={`p-4 rounded-xl border-2 text-left transition-all relative ${data.studyTempo === '40+10' ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}><div className="flex justify-between items-start mb-2"><Clock size={24} className={data.studyTempo === '40+10' ? 'text-blue-600' : 'text-gray-400'} />{data.studyTempo === '40+10' && <CheckCircle2 size={20} className="text-blue-600" />}</div><div className="font-bold text-gray-800">40 dk Ders</div><div className="text-sm text-gray-600">+ 10 dk Mola</div></button><button onClick={() => update({ studyTempo: '50+15' })} className={`p-4 rounded-xl border-2 text-left transition-all relative ${data.studyTempo === '50+15' ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}><div className="flex justify-between items-start mb-2"><Brain size={24} className={data.studyTempo === '50+15' ? 'text-blue-600' : 'text-gray-400'} />{data.studyTempo === '50+15' && <CheckCircle2 size={20} className="text-blue-600" />}</div><div className="font-bold text-gray-800">50 dk Ders</div><div className="text-sm text-gray-600">+ 15 dk Mola</div></button><div className={`p-4 rounded-xl border-2 transition-all relative ${isCustomSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}><div className="flex justify-between items-start mb-2"><Settings size={24} className={isCustomSelected ? 'text-blue-600' : 'text-gray-400'} />{isCustomSelected && <CheckCircle2 size={20} className="text-blue-600" />}</div><div className="font-bold text-gray-800 mb-2">Kendi Düzenim</div><div className="flex gap-3"><div><label className="text-xs text-gray-500 block mb-1">Ders (dk)</label><input type="number" value={customStudy} onChange={(e) => handleCustomTempoChange(e.target.value, customBreak)} className="w-full p-2 rounded border border-gray-300 text-sm w-20" placeholder="45" /></div><div className="pt-6 text-gray-400">+</div><div><label className="text-xs text-gray-500 block mb-1">Mola (dk)</label><input type="number" value={customBreak} onChange={(e) => handleCustomTempoChange(customStudy, e.target.value)} className="w-full p-2 rounded border border-gray-300 text-sm w-20" placeholder="15" /></div></div></div></div></div>
       <div className="pt-6 flex justify-between border-t border-gray-100"><button onClick={onBack} className="px-6 py-3 rounded-lg font-medium text-gray-600 hover:bg-gray-100 transition-colors">Geri</button><button onClick={onFinish} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all active:scale-95"><Brain className="animate-pulse" size={20} />Yapay Zeka ile Oluştur</button></div>

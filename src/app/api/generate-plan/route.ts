@@ -153,43 +153,46 @@ export async function POST(req: NextRequest) {
         if (validModel) selectedModel = validModel.name;
     }
 
-    // --- YENİ KATI PROMPT: SAYISAL/SÖZEL DENGESİ ---
+    // --- YENİ KATI PROMPT: SAYISAL/SÖZEL DENGESİ + ÖĞRENCİ TERCİHLERİ ---
     const prompt = `
       Sen çok disiplinli ve stratejik bir LGS Koçusun.
       GÖREV: Aşağıdaki ders programını kurallara %100 uyarak doldur.
 
-      DERS KATEGORİLERİ (BUNU EZBERLE):
-      - SAYISAL DERSLER: Matematik, Fen Bilimleri
-      - SÖZEL DERSLER: Türkçe, T.C. İnkılap, İngilizce, Din Kültürü
+      DERS KATEGORİLERİ:
+      - SAYISAL: Matematik, Fen Bilimleri
+      - SÖZEL: Türkçe, T.C. İnkılap, İngilizce, Din Kültürü
 
-      ÖĞRENCİ BİLGİLERİ:
+      ÖĞRENCİ BİLGİLERİ (ÇOK ÖNEMLİ):
       - Hedef: "${formData.targetSchoolName || formData.targetScore}"
-      - Zayıf Dersler: ${formData.difficultSubjects?.join(', ')}
-      - İstenen Ders Sıklıkları: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v} kez`).join(', ')}
+      - AĞIRLIK VERİLECEK DERSLER (ÖNCELİK): ${formData.difficultSubjects?.join(', ')} (Bu dersleri diğerlerine göre daha fazla yerleştir).
+      - MİNİMUM DERS SIKLIKLARI: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v} kez`).join(', ')} (Her ders için belirtilen sayı, o dersin haftada EN AZ kaç gün çalışılacağını gösterir. Bu sayının altına düşme).
 
       HEDEF OKUL ANALİZİ:
       1. Okul Adı: Verilen okul adını kullan.
       2. Puan & Yüzdelik: Yukarıdaki verileri kullan.
       3. Hitap: "Merhaba Sevgili Öğrenci" diye başla. Okul adıyla hitap etme.
 
-      PROGRAM YERLEŞTİRME KURALLARI (ÇOK ÖNEMLİ):
+      PROGRAM YERLEŞTİRME KURALLARI:
 
       KURAL 1: SABİT BAŞLANGIÇ
       - Her günün 1. dersi MUTLAKA "Paragraf Soru Çözümü" olacak.
-      - Her günün 2. dersi MUTLAKA "Matematik" olacak. (Bu kural değişmez).
+      - Her günün 2. dersi MUTLAKA "Matematik" olacak.
 
       KURAL 2: ZİG-ZAG YÖNTEMİ (SAYISAL - SÖZEL DENGESİ)
       - Asla iki sayısal dersi (Mat, Fen) peş peşe koyma.
       - Asla iki sözel dersi (Türkçe, İnkılap, İng, Din) peş peşe koyma.
-      - Örnek Akış: Paragraf(Sözel) -> Matematik(Sayısal) -> Türkçe(Sözel) -> Fen(Sayısal) -> İnkılap(Sözel)...
-      - Matematik'ten sonra mutlaka Sözel bir ders gelmeli.
+      - Örnek: Paragraf -> Mat -> Türkçe -> Fen -> İnkılap...
 
       KURAL 3: GÜNLÜK DENGE
-      - Her gün mutlaka hem Sayısal hem Sözel ders olacak. Bir günü sadece sözele veya sadece sayısala boğma.
+      - Her gün mutlaka hem Sayısal hem Sözel ders olacak.
 
       KURAL 4: MATEMATİK YOĞUNLUĞU
       - Zaten her gün 1 saat matematik (2. derste) var.
-      - Eğer öğrenci matematikte zorlanıyorsa veya hafta sonuysa, günün ilerleyen saatlerine (akşam tarafına) 2. bir Matematik dersi daha koyabilirsin.
+      - Eğer "Matematik" yukarıda ağırlık verilecek derslerdeyse veya haftalık sıklığı yüksekse, günün ilerleyen saatlerine 2. bir Matematik dersi daha koy.
+
+      KURAL 5: ÖĞRENCİ TERCİHLERİ
+      - Öğrencinin "Ağırlık Verilecek Dersler" listesindeki dersleri programda diğerlerinden daha fazla gör.
+      - "Minimum Ders Sıklıkları"na mutlaka uy.
 
       ÇIKTI (JSON):
       {
@@ -270,7 +273,6 @@ export async function POST(req: NextRequest) {
 
     generatedData.target_analysis = analysis;
 
-    // Tavsiye içindeki isim düzeltmesi
     let advice = generatedData.expert_advice || "";
     const badName = formData.targetSchoolName ? formData.targetSchoolName.split(' ')[0] : null;
     if (badName && advice.includes(badName)) {
