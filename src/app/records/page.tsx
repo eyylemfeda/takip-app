@@ -168,7 +168,7 @@ export default function RecordsPage() {
             href="/records/new"
             className="inline-flex items-center justify-center h-7 w-24 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 md:h-auto md:w-auto md:px-4 md:py-2 md:text-sm"
           >
-            Yeni Kayt
+            Yeni Kayıt
           </Link>
         </div>
       </div>
