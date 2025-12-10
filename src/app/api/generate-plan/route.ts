@@ -155,60 +155,113 @@ export async function POST(req: NextRequest) {
     }
 
     // --- PROMPT (BLOK DERS ZORUNLULUĞU GETİRİLDİ) ---
-    const prompt = `
+        const prompt = `
       Sen çok disiplinli bir LGS Koçusun.
       GÖREV: Aşağıdaki ders programını SIKI KURALLARA uyarak doldur.
 
       DERS KATEGORİLERİ:
       - SAYISAL: Matematik, Fen Bilimleri
       - SÖZEL: Türkçe, T.C. İnkılap, İngilizce, Din Kültürü
+      - OKUMA: Paragraf (sadece "Paragraf" yaz)
 
       ÖĞRENCİ BİLGİLERİ:
       - Hedef: "${formData.targetSchoolName || formData.targetScore}"
-      - AĞIRLIKLI DERSLER: ${formData.difficultSubjects?.join(', ')}
-      - SIKLIKLAR: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v} kez`).join(', ')}
+      - ZORLANILAN DERSLER: ${formData.difficultSubjects?.join(', ') || 'Yok'}
+      - HAFTALIK ÇALIŞMA GÜN SAYILARI: ${Object.entries(formData.subjectFrequencies || {}).map(([k, v]) => `${k}: ${v} gün`).join(', ')}
+
+      ÇALIŞMA BLOKLARININ ADLANDIRILMASI (ÇOK ÖNEMLİ):
+      - Her ders bloğunda sadece ders adını yaz.
+      - ÖRNEK DOĞRU: "Matematik", "Fen Bilimleri", "Türkçe", "Paragraf", "İngilizce", "T.C. İnkılap", "Din Kültürü".
+      - ÖRNEK YANLIŞ: "Matematik konu tekrarı", "Fen soru çözümü", "deneme çözümü", "test çözümü", "konu tekrarı ve test".
+      - ASLA şu kelimeleri kullanma: "konu tekrarı", "soru çözümü", "test", "deneme", "deneme çözümü", "analiz", "tekrar".
+      - Yalnızca ders adı kullan. Öğrenci bu blokta ne yapacağına (tekrar mı, test mi, deneme mi) kendi karar verecek.
 
       HEDEF OKUL ANALİZİ:
       1. Okul Adı: Verilen okul adını kullan.
       2. Puan & Yüzdelik: Yukarıdaki verileri kullan.
       3. Hitap: "Merhaba Sevgili Öğrenci" diye başla. Okul adıyla hitap etme.
 
-      YERLEŞTİRME KURALLARI (BU KURALLAR KANUNDUR, ASLA BOZMA):
+      PROGRAM İSKELETİNİN KULLANIMI:
+      - Sana verilen PROGRAM İSKELETİ'nde, "activity" alanı "AI_FILL_ME" olan bloklar sadece çalışma bloklarıdır.
+      - Sadece "AI_FILL_ME" olan blokların "activity" alanını doldur.
+      - "Okul", "Dershane/Etüt", "Kurs", "BİLSEM", "Kitap Okuma" gibi aktiviteleri ASLA değiştirme, silme veya yeniden adlandırma.
+      - Yeni zaman blokları ekleme, verilen zaman bloklarının saatlerini değiştirme.
 
-      KURAL 1: SABİT BAŞLANGIÇ (HER GÜN)
-      - Günün 1. dersi (AI_FILL_ME) => "Paragraf Soru Çözümü"
-      - Günün 2. dersi (AI_FILL_ME) => "Matematik"
-      (Bu sıra asla değişmez).
+      KURAL 1: PARAGRAF VE MATEMATİK ZORUNLULUĞU (ESNEK SAATLER)
+      - Her günün programında EN AZ bir "Paragraf" ve EN AZ bir "Matematik" dersi olmalı.
+      - Paragraf ve Matematik aynı gün içinde herhangi saatlere yerleştirilebilir; ilk iki blok olmak zorunda DEĞİLDİR.
+      - Eğer mümkünse, Paragraf ve Matematik bloklarından en az biri günün ilk yarısında olsun; fakat bu sadece bir tercihtir, zorunlu değildir.
+      - Paragraf dersi SÖZEL; Matematik dersi SAYISAL kabul edilir ve diğer kurallardaki sayısal–sözel dengeye dahildir.
 
-      KURAL 2: BLOK DERS ZORUNLULUĞU (HAFTA İÇİ)
-      - Hafta içi günlerde aynı dersten 2 tane vereceksen, bunları MUTLAKA YAN YANA koy.
-      - Asla dersleri dağıtma!
-      - DOĞRU: Mat, Mat, Fen, Fen, Türkçe.
-      - YANLIŞ: Mat, Fen, Mat, Fen, Türkçe. (BUNU YAPMA!)
 
-      KURAL 3: ZİG-ZAG (BLOKLAR ARASI)
-      - Sayısal bir bloktan sonra Sözel bir blok gelmeli.
-      - Örnek: [Paragraf] -> [Mat, Mat] -> [Türkçe] -> [Fen, Fen]
+      KURAL 2: MATEMATİK YOĞUNLUĞU
+      - Matematik için haftalık gün sayısı, "HAFTALIK ÇALIŞMA GÜN SAYILARI" bilgisinden gelir.
+      - Matematik çalışma gün sayısı AZ ise (haftada 2–3 gün):
+        - O günlere en az 2 blok (yaklaşık 1 saat) Matematik koy.
+      - Matematik çalışma gün sayısı ORTA/YÜKSEK ise (4–6 gün):
+        - Bazı günlere 2 blok, bazı günlere 3 blok Matematik koy.
+      - Matematik, ZORLANILAN DERSLER listesindeyse:
+        - Haftada mümkün olduğunca birkaç güne 3 blok Matematik planla.
+      - Aynı gün içinde birden fazla Matematik bloğu varsa:
+        - Bu blokları mutlaka ARKA ARKAYA yerleştir. (Blok ders)
+        - Örnek doğru: Mat, Mat, (sonra sözel) – veya Mat, Mat, Mat.
+        - Örnek yanlış: Mat, Fen, Mat (böyle DAĞITMA).
 
-      KURAL 4: ÖĞRENCİ TERCİHLERİ
-      - Öğrencinin ağırlık verilmesini istediği dersleri daha çok kullan.
-      - Haftalık sıklık sayılarına tam olarak uy.
+      KURAL 3: SAYISAL–SÖZEL ZİG-ZAG
+      - Matematik ve Fen Bilimleri SAYISAL; Türkçe, T.C. İnkılap, İngilizce, Din Kültürü ve Paragraf SÖZEL kabul edilir.
+      - SAYISAL bir bloktan sonra mümkün olduğunca SÖZEL bir blok gelmeli.
+      - SÖZEL bir bloktan sonra mümkün olduğunca SAYISAL bir blok gelmeli.
+      - Ancak önce aynı dersteki BLOKları bitir (örneğin Mat, Mat, Mat), sonra zig-zag'a devam et.
+      - Örnek doğru sıra:
+        - Paragraf, Mat, Mat, Türkçe, Fen Bilimleri, Fen Bilimleri, İngilizce, Matematik ...
+      - Örnek yanlış:
+        - Mat, Fen, Mat, Fen, Türkçe (aynı dersi araya başka dersler koyarak bölme).
 
-      ÇIKTI (JSON):
+      KURAL 4: ÖĞRENCİ TERCİHLERİNE SAYGI
+      - Öğrencinin her ders için istediği haftalık gün sayısına tam olarak uy.
+        - Örneğin "Matematik: 5 gün" ise, haftalık programda tam 5 ayrı günde Matematik olmalı.
+      - "ZORLANILAN DERSLER" listesindeki derslere daha fazla blok ver.
+      - Hedef lise puanı yüksekse (485 ve üzeri), sayısal ağırlığı bir miktar artır.
+      - Ancak program öğrenciyi bunaltmayacak şekilde dengeli olmalı.
+
+      KURAL 5: ÇIKTIYI NET JSON OLARAK VER
+      - Aşağıdaki formatta JSON üret:
       {
          "target_analysis": {
             "school_name": "Tam Okul Adı",
             "min_score": 485,
             "percentile": "0.85",
-            "motivation": "Motive edici bir cümle."
+            "motivation": "Motive edici kısa bir cümle."
          },
-         "expert_advice": "Merhaba Sevgili Öğrenci... (Tavsiyeler)",
-         "schedule": [ ... ]
+         "expert_advice": "Merhaba Sevgili Öğrenci... (Haftalık koçluk mesajı)",
+         "schedule": [
+           {
+             "day": "Pazartesi",
+             "blocks": [
+               { "start": "17:00", "end": "17:40", "activity": "Paragraf", "type": "lesson" },
+               { "start": "17:40", "end": "18:20", "activity": "Matematik", "type": "lesson" },
+               ...
+             ]
+           },
+           ...
+         ]
       }
 
-      PROGRAM İSKELETİ:
+      KOÇLUK MESAJI (expert_advice) NASIL OLMALI:
+      - "expert_advice" alanında öğrenciye profesyonel bir haftalık koçluk metni yaz.
+      - Önce öğrencinin tercih ettiği ders dağılımını ve çalışma isteğini takdir et.
+      - Daha sonra, hedef lise ve zorlandığı dersleri dikkate alarak:
+        - "Senin isteklerine göre böyle bir program hazırladım; ancak hedeflediğin lise ve zorlandığın dersler açısından şunları yaparsan daha iyi olur..." şeklinde açıklama yap.
+      - Gerekirse şu tarz net öneriler ver:
+        - "Bir sonraki programda Matematik çalışma gün sayını 4'ten 5'e çıkarırsan, sayısal netlerin daha hızlı artabilir."
+        - "Fen Bilimleri'nde zorlandığını belirttiğin için haftalık blok sayısını biraz daha artırmayı düşünebilirsin."
+      - Metnin sonunda mutlaka şu tarz bir cümleyle bitir:
+        - "İstersen bir sonraki programda haftalık çalışmak istediğin ders gün sayılarını bu önerilere göre ayarla; ben de sana hedeflerine daha uygun, daha güçlü bir program hazırlayayım."
+
+      PROGRAM İSKELETİ (SADECE REFERANS İÇİN):
       ${JSON.stringify(scheduleSkeleton)}
     `;
+
 
     console.log(`2. AI İsteği gönderiliyor (${selectedModel})...`);
 
