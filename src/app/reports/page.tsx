@@ -13,6 +13,7 @@ type RawRecord = {
   subject_id: string | null;
   topic_id: string | null;
   source_id: string | null; // veritabanındaki adıyla
+  note: string | null;
 };
 
 // İşlenmiş Rapor Satırı (İsimler)
@@ -135,7 +136,7 @@ export default function StudentReportPage() {
     // SORGULAMA: Sadece ID'leri çekiyoruz (JOIN YOK)
     let query = supabase
       .from('records')
-      .select('question_count, subject_id, topic_id, source_id, activity_date') // ID'leri çekiyoruz
+      .select('question_count, subject_id, topic_id, source_id, activity_date, note') // ID'leri çekiyoruz
       .eq('user_id', uid!) // Sadece kendi verisi
       .not('question_count', 'is', null)
       .gt('question_count', 0);
@@ -157,12 +158,23 @@ export default function StudentReportPage() {
 
     // BİRLEŞTİRME (ID -> İsim)
     // Ham veriyi alıp, yukarıda oluşturduğumuz Map'lerden isimleri buluyoruz.
-    const processedRows: StudentReportRow[] = (rawData as RawRecord[]).map(r => ({
-      question_count: r.question_count,
-      subject_name: (r.subject_id ? subjectsMap.get(r.subject_id) : null) || 'Belirtilmemiş Ders',
-      topic_name: (r.topic_id ? topicsMap.get(r.topic_id) : null) || 'Belirtilmemiş Konu',
-      source_name: (r.source_id ? sourcesMap.get(r.source_id) : null) || 'Belirtilmemiş Kaynak',
-    }));
+    const processedRows: StudentReportRow[] = (rawData as RawRecord[]).map(r => {
+      // 1. Önce veritabanındaki saf kaynak ismini bul
+      const baseSourceName = (r.source_id ? sourcesMap.get(r.source_id) : null) || 'Belirtilmemiş Kaynak';
+
+      // 2. Eğer kayıtta bir NOT varsa, bunu kaynak ismine ekle
+      // Örnek Çıktı: "LGS Denemesi - Kurumsal Deneme (Mozaik Yayınları 3)"
+      const finalSourceName = r.note
+        ? `${baseSourceName} (${r.note})`
+        : baseSourceName;
+
+      return {
+        question_count: r.question_count,
+        subject_name: (r.subject_id ? subjectsMap.get(r.subject_id) : null) || 'Belirtilmemiş Ders',
+        topic_name: (r.topic_id ? topicsMap.get(r.topic_id) : null) || 'Belirtilmemiş Konu',
+        source_name: finalSourceName, // <-- Güncellenmiş kaynak ismi buraya geliyor
+      };
+    });
 
     setReportRows(processedRows);
     setLoading(false);
