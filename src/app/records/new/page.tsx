@@ -12,7 +12,7 @@ type Subject = { id: string; name: string };
 type Topic = { id: string; name: string; subject_id: string };
 type Source = { id: string; name: string; subject_id: string; user_id: string };
 
-// LGS Ders Şablonu (Görseldeki isimlerle birebir aynı olmalı)
+// LGS Ders Şablonu (Veritabanındaki isimlerle BİREBİR aynı olmalı)
 const LGS_TEMPLATE = [
   { name: 'Türkçe', total: 20 },
   { name: 'Matematik', total: 20 },
@@ -51,7 +51,7 @@ function NewRecordInner() {
   const [durationMin, setDurationMin] = useState('');
   const [note, setNote] = useState('');
 
-  // --- TARİH ---
+  // --- TARİH (Her iki mod için ortak) ---
   const [dateMode, setDateMode] = useState<'today' | 'specific' | 'off'>('today');
   const [specificDate, setSpecificDate] = useState(todayLocalISODate());
 
@@ -95,7 +95,7 @@ function NewRecordInner() {
     })();
   }, [uid, subjectId, mode]);
 
-  /* ========= Edit Modu ========= */
+  /* ========= Edit Modu Verisi ========= */
   useEffect(() => {
     if (!uid || !editId) return;
     (async () => {
@@ -209,13 +209,14 @@ function NewRecordInner() {
     }
   }
 
-  /* ========= LGS DENEME KAYIT (STANDARDIZE EDİLMİŞ) ========= */
+  /* ========= LGS DENEME KAYIT (STANDARTLAŞTIRILMIŞ) ========= */
   async function handleLgsSubmit() {
     if (!uid) return setMsg('Giriş gerekli.');
     if (!denemeAdi.trim()) return setMsg('Lütfen Deneme Adını giriniz (Örn: Mozaik 1).');
 
     setMsg('Deneme kaydediliyor, lütfen bekleyiniz...');
 
+    // 1. TARİHİ BELİRLE (Tüm kayıtlar için aynı olacak)
     let activity_date: string | null = null;
     let off_calendar = false;
     if (dateMode === 'today') activity_date = todayLocalISODate();
@@ -227,29 +228,32 @@ function NewRecordInner() {
         let totalWrong = 0;
         let totalEmpty = 0;
 
-        // 1. Önce 6 Ana Dersin Kaydını Hazırla
+        // 2. ANA DERSLER İÇİN KAYITLARI OLUŞTUR
+        // Promise.all kullanarak tüm dersleri paralel işlemeye hazırlıyoruz
         const lessonPromises = LGS_TEMPLATE.map(async (lesson) => {
-            // Ders ID'sini tam eşleşme ile bul
+            // A. DERSİ BUL
+            // Veritabanındaki isim ile şablondaki isim BİREBİR aynı olmalı.
             const subject = subjects.find(s => s.name === lesson.name);
 
             if (!subject) {
                 console.warn(`${lesson.name} için ders veritabanında bulunamadı!`);
-                return null;
+                return null; // Dersi bulamazsa atlar, hata vermez
             }
 
-            // A. KONU BUL/OLUŞTUR: "LGS Deneme" (Sabit Standart)
+            // B. KONU AYARLA: "LGS Deneme" (Sabit)
             let finalTopicId = null;
             const { data: existingTopics } = await supabase.from('topics')
                 .select('id').eq('subject_id', subject.id).eq('name', 'LGS Deneme').maybeSingle();
 
             if (existingTopics) finalTopicId = existingTopics.id;
             else {
+                // Konu yoksa otomatik oluştur
                 const { data: newTopic } = await supabase.from('topics')
                     .insert({ subject_id: subject.id, name: 'LGS Deneme' }).select('id').single();
                 if (newTopic) finalTopicId = newTopic.id;
             }
 
-            // B. KAYNAK BUL/OLUŞTUR: "LGS Denemesi - Kurumsal Deneme" (Sabit Standart)
+            // C. KAYNAK AYARLA: "LGS Denemesi - Kurumsal Deneme" (Sabit)
             let finalSourceId = null;
             const standardSourceName = 'LGS Denemesi - Kurumsal Deneme';
 
@@ -258,44 +262,44 @@ function NewRecordInner() {
 
             if (existingSource) finalSourceId = existingSource.id;
             else {
+                // Kaynak yoksa otomatik oluştur
                 const { data: newSource } = await supabase.from('sources')
                     .insert({ user_id: uid, subject_id: subject.id, name: standardSourceName }).select('id').single();
                 if (newSource) finalSourceId = newSource.id;
             }
 
-            // C. İstatistikler
+            // D. VERİLERİ HAZIRLA
             const scores = lgsScores[lesson.name] || { dogru: lesson.total, yanlis: 0 };
             const bos = lesson.total - scores.dogru - scores.yanlis;
 
-            // Toplam hesaplama için topla
+            // Toplamları hesapla
             totalCorrect += scores.dogru;
             totalWrong += scores.yanlis;
             totalEmpty += bos;
 
+            // E. KAYIT OBJESİNİ DÖNDÜR
             return {
                 user_id: uid,
                 subject_id: subject.id,
                 topic_id: finalTopicId,
                 source_id: finalSourceId,
-                question_count: lesson.total, // İstatistikler için soru sayısı girilir
-                note: `[${denemeAdi}]`, // Deneme adı nota yazılır
-                correct_count: scores.dogru,
-                wrong_count: scores.yanlis,
-                empty_count: bos,
-                activity_date,
+                question_count: lesson.total, // TAM SORU SAYISI (Boş/Yanlış olsa da çözülmüş sayılır)
+                note: denemeAdi,              // NOT: Kullanıcının girdiği deneme adı buraya yazılır
+                correct_count: scores.dogru,  // Rapor için
+                wrong_count: scores.yanlis,   // Rapor için
+                empty_count: bos,             // Rapor için
+                activity_date,                // Ortak tarih
                 off_calendar
             };
         });
 
+        // Tüm derslerin işlemlerinin bitmesini bekle
         const lessonRecords = (await Promise.all(lessonPromises)).filter(r => r !== null);
 
-        // 2. "LGS Denemeleri" Dersi İçin Özet Kayıt Hazırla
-        // Bu kayıt soru sayısını 0 girer ki toplamı bozmasın, ama listede görünür.
+        // 3. "LGS Denemeleri" ÖZET DERSİ İÇİN KAYIT OLUŞTUR
         const summarySubject = subjects.find(s => s.name === 'LGS Denemeleri');
 
         if (summarySubject) {
-
-            // Özet kayıt verisi
             const totalNet = totalCorrect - (totalWrong / 3);
 
             lessonRecords.push({
@@ -303,7 +307,7 @@ function NewRecordInner() {
                 subject_id: summarySubject.id,
                 topic_id: null,
                 source_id: null,
-                question_count: 0, // DİKKAT: Toplamı şişirmemesi için 0
+                question_count: 0, // Toplam soru sayısını şişirmemek için 0
                 note: `${denemeAdi} - Toplam Net: ${totalNet.toFixed(2)}`,
                 correct_count: totalCorrect,
                 wrong_count: totalWrong,
@@ -313,7 +317,7 @@ function NewRecordInner() {
             });
         }
 
-        // 3. Hepsini Kaydet
+        // 4. HEPSİNİ TEK SEFERDE KAYDET
         if (lessonRecords.length > 0) {
             const { error } = await supabase.from('records').insert(lessonRecords);
             if (error) throw error;
@@ -321,6 +325,8 @@ function NewRecordInner() {
             setMsg(`Tebrikler! ${denemeAdi} başarıyla kaydedildi.`);
             setDenemeAdi('');
             setLgsScores({});
+            // İsterseniz sayfayı yeniletmek yerine yönlendirme yapabilirsiniz
+            // router.push('/records');
         }
 
     } catch (err: any) {
@@ -377,7 +383,7 @@ function NewRecordInner() {
                         onChange={(e) => setDenemeAdi(e.target.value)}
                     />
                     <p className="text-xs text-gray-500">
-                        Sorular otomatik olarak <b>LGS Deneme</b> konusuna ve <b>LGS Denemesi - Kurumsal Deneme</b> kaynağına eklenecektir.
+                        Sorular otomatik olarak <b>LGS Deneme</b> konusuna ve <b>LGS Denemesi - Kurumsal Deneme</b> kaynağına eklenecektir. Girilen isim 'Not' olarak saklanır.
                     </p>
                 </div>
 
