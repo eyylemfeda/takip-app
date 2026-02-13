@@ -483,16 +483,16 @@ function NewRecordInner() {
                         <label className="text-sm font-medium">Soru Sayısı</label>
                         <input className="rounded-lg border p-1" type="number" placeholder="örn. 35" value={questionCount} onChange={(e) => setQuestionCount(e.target.value)} min={0} />
                     </div>
-                    <div className="grid gap-1">
+                    {/*<div className="grid gap-1">
                         <label className="text-sm font-medium">Süre (Dk)</label>
                         <input className="rounded-lg border p-1" type="number" placeholder="örn. 40" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} min={0} />
-                    </div>
+                    </div>*/}
                 </div>
 
-                <div className="grid gap-1">
+                {/*<div className="grid gap-1">
                     <label className="text-sm font-medium">Not (Opsiyonel)</label>
                     <textarea className="rounded-lg border p-1 text-sm" rows={2} placeholder="Notunuz..." value={note} onChange={(e) => setNote(e.target.value)} />
-                </div>
+                </div>*/}
             </>
         )}
 

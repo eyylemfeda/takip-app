@@ -269,9 +269,24 @@ export default function RecordsPage() {
                       </span>
                     )}
                   </div>
-                  {/* 2️⃣ Kaynak */}
-                  {r.source?.name && (
-                    <div className="font-semibold text-gray-700">{r.source.name}</div>
+                  {/* 2️⃣ Kaynak ve Not Gösterimi */}
+                  {r.source?.name ? (
+                    <div className="font-semibold text-gray-700">
+                      {r.source.name}
+                      {/* EĞER NOT VARSA YANINA EKLE */}
+                      {r.note && (
+                        <span className="ml-2 font-normal text-gray-500 text-xs sm:text-sm">
+                          ({r.note})
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    /* Kaynak yoksa ama NOT varsa, sadece notu göster */
+                    r.note && (
+                      <div className="text-gray-500 text-sm italic">
+                        Not: {r.note}
+                      </div>
+                    )
                   )}
                   {/* 3️⃣ Konu */}
                   {r.topic?.name && (
