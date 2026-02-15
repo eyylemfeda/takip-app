@@ -33,7 +33,7 @@ export default function AdminDashboardPage() {
                 Özel Takip Paneli
             </h2>
             {/* Yatay Düzen: Solda Kızım, Sağda Oğlum */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-64">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <AdminStudentCard studentId={KIZIM_ID} studentName="Nisan Dua" />
                 <AdminStudentCard studentId={OGLUM_ID} studentName="Toprak" />
             </div>
