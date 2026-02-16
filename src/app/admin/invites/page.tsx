@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
+// --- TİP TANIMLARI ---
+type Profile = {
+  id: string;
+  role: string;
+  full_name?: string;
+  // diğer alanlar...
+};
+
 type Invite = {
   id: string;
   email: string;
@@ -15,15 +23,18 @@ type Invite = {
   used_by: string | null;
 };
 
-export default function AdminInvitesPage() {
-  // --- oluşturma formu ---
+export default function InvitesPage() {
+  // --- Kullanıcı Profili (Kim giriş yapmış?) ---
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  // --- Davet oluşturma formu ---
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('student');
   const [days, setDays] = useState(7);
   const [link, setLink] = useState<string | null>(null);
   const [busyCreate, setBusyCreate] = useState(false);
 
-  // --- liste ---
+  // --- Davet listesi ---
   const [rows, setRows] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -33,7 +44,28 @@ export default function AdminInvitesPage() {
       ? window.location.origin
       : (process.env.NEXT_PUBLIC_SITE_URL ?? '');
 
-  // Durum etiketi hesaplama
+  // 1. ÖNCE PROFİLİ ÇEKELİM (Sayfa açılınca çalışır)
+  useEffect(() => {
+    async function getProfile() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (data) {
+        setProfile(data);
+        // Profil bilgisini aldıktan hemen sonra davetleri çekiyoruz
+        fetchInvites(data); 
+      }
+    }
+    getProfile();
+  }, []);
+
+  // Durum etiketi hesaplama (Aktif, Süresi Doldu, Kullanıldı)
   function getStatus(inv: Invite) {
     const now = Date.now();
     if (inv.used_at) return { label: 'Kullanıldı', tone: 'bg-emerald-100 text-emerald-700' };
@@ -43,23 +75,36 @@ export default function AdminInvitesPage() {
     return { label: 'Aktif', tone: 'bg-blue-100 text-blue-700' };
   }
 
+  // Aktif davet sayısı
   const activeCount = useMemo(
     () =>
       rows.filter((r) => !r.used_at && (!r.expires_at || new Date(r.expires_at).getTime() > Date.now())).length,
     [rows]
   );
 
-  async function fetchInvites() {
+  // 2. DAVETLERİ ÇEKME VE FİLTRELEME (İşte kaybolan kısım burasıydı)
+  async function fetchInvites(currentUserProfile: any = profile) {
+    if (!currentUserProfile) return;
+
     setLoading(true);
     setMsg(null);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('invites')
-        .select(
-          'id,email,role,code,created_at,created_by,expires_at,used_at,used_by'
-        )
+        .select('id,email,role,code,created_at,created_by,expires_at,used_at,used_by')
         .order('created_at', { ascending: false })
         .limit(200);
+
+      // --- DÜZELTME VE FİLTRELEME ---
+      // Eğer kullanıcı Admin DEĞİLSE ve KOÇ ise, sadece kendi davetlerini görsün
+      if (currentUserProfile.role === 'coach') {
+        // (currentUserProfile as any).id diyerek hatayı susturuyoruz
+        query = query.eq('created_by', (currentUserProfile as any).id);
+      }
+      // Admin ise zaten bir filtre uygulamıyoruz, hepsini görür.
+      // ---------------------------------------
+
+      const { data, error } = await query;
       if (error) throw error;
       setRows((data as Invite[]) ?? []);
     } catch (e: any) {
@@ -69,10 +114,7 @@ export default function AdminInvitesPage() {
     }
   }
 
-  useEffect(() => {
-    fetchInvites();
-  }, []);
-
+  // 3. YENİ DAVET OLUŞTURMA
   async function createInvite(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
@@ -92,7 +134,7 @@ export default function AdminInvitesPage() {
       setLink(url);
       setMsg(`Davet oluşturuldu. Son kullanma: ${new Date(expires_at).toLocaleString('tr-TR')}`);
       setEmail('');
-      // listeyi güncelle
+      // Listeyi güncelle
       fetchInvites();
     } catch (e: any) {
       setMsg(e?.message || 'Hata oluştu.');
@@ -110,7 +152,7 @@ export default function AdminInvitesPage() {
 
   async function expireInvite(inv: Invite) {
     if (inv.used_at) return;
-    const ok = confirm(`${inv.email} için daveti iptal etmek (süresini hemen sonlandırmak) istiyor musun?`);
+    const ok = confirm(`${inv.email} için daveti iptal etmek istiyor musun?`);
     if (!ok) return;
     try {
       const { error } = await supabase
@@ -125,17 +167,17 @@ export default function AdminInvitesPage() {
       setMsg(e?.message || 'İptal edilemedi.');
     }
   }
-//sayfa kenarlıklarını p-0 ile ayarladım
+
   return (
     <main className="p-0 space-y-3">
       <h1 className="text-2xl font-bold">Davetler</h1>
 
-      {/* Özet */}
+      {/* Özet Bilgi */}
       <div className="text-sm text-gray-600">
         Toplam: <b>{rows.length}</b> • Aktif: <b>{activeCount}</b>
       </div>
 
-      {/* Davet oluştur */}
+      {/* --- Davet Oluşturma Kartı --- */}
       <section className="rounded-2xl border bg-white px-2 sm:px-3 md:px-4 py-3 shadow-sm space-y-3">
         <h2 className="font-semibold mb-2 sm:mb-3">Yeni Davet Oluştur</h2>
         <form onSubmit={createInvite} className="space-y-3">
@@ -160,8 +202,9 @@ export default function AdminInvitesPage() {
                 className="w-full border rounded px-3 py-2"
               >
                 <option value="student">Öğrenci</option>
-                <option value="parent">Veli</option>
-                <option value="coach">Koç</option>
+                {/* Koçlar sadece öğrenci ekleyebilsin, Admin herkesi ekleyebilsin */}
+                {profile?.role === 'admin' && <option value="parent">Veli</option>}
+                {profile?.role === 'admin' && <option value="coach">Koç</option>}
               </select>
             </div>
 
@@ -206,12 +249,12 @@ export default function AdminInvitesPage() {
         )}
       </section>
 
-      {/* Liste */}
+      {/* --- Davet Listesi Kartı --- */}
       <section className="rounded-2xl border bg-white p-4 shadow-sm">
         <div className="mb-2 sm:mb-3 flex items-center justify-between">
           <h2 className="font-semibold">Davet Listesi</h2>
           <div className="flex items-center gap-2">
-            <button onClick={fetchInvites} className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50">
+            <button onClick={() => fetchInvites()} className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50">
               Yenile
             </button>
           </div>
