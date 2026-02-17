@@ -12,9 +12,11 @@ import {
   Users,
   LayoutDashboard,
   Settings,
+  UserPlus,
   UserCheck
 } from 'lucide-react';
-// Sizin paylaştığınız gelişmiş kart bileşeni
+
+// Sizin onayladığınız detaylı kart bileşeni
 import AdminStudentCard from '@/components/AdminStudentCard';
 
 export default function AdminDashboardPage() {
@@ -24,20 +26,15 @@ export default function AdminDashboardPage() {
 
   // Öğrencileri Çek
   useEffect(() => {
-    // Eğer profil henüz yüklenmediyse işlem yapma
     if (!profile) return;
 
     async function fetchStudents() {
-      // TypeScript için profilin null olmadığından emin oluyoruz
-      if (!profile) return;
-
+      // "Bana atanmış" öğrencileri bul (coach_id = benim id)
       const { data } = await supabase
         .from('profiles')
         .select('id, full_name')
         .eq('role', 'student')
-        // BURADA DEĞİŞİKLİK YAPTIK: (profile as any).id
-        // Bu sayede 'id yok' ve 'null olabilir' hatalarını susturuyoruz.
-        .eq('coach_id', (profile as any).id)
+        .eq('coach_id', (profile as any).id) // ID hatasını önlemek için cast ettik
         .order('full_name');
 
       if (data) {
@@ -84,39 +81,10 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* --- 1. ÖĞRENCİ TAKİP BÖLÜMÜ (Kartlar) --- */}
+      {/* ========================================================= */}
+      {/* 1. BÖLÜM: YÖNETİM ARAÇLARI (ÜSTTE)                       */}
+      {/* ========================================================= */}
       <section className="space-y-4">
-        <div className="flex items-center gap-2 text-gray-700">
-          <BarChart2 className="text-indigo-600" />
-          <h2 className="text-xl font-semibold">Öğrencilerim & Performans</h2>
-        </div>
-
-        {myStudents.length > 0 ? (
-          // AdminStudentCard bileşeni sabit yükseklikli olduğu için grid yapısı kuruyoruz
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {myStudents.map((student) => (
-              <AdminStudentCard
-                key={student.id}
-                studentId={student.id}
-                studentName={student.full_name || 'İsimsiz Öğrenci'}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-8 text-center">
-            <UserCheck className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">Size atanmış öğrenci bulunmuyor.</p>
-            {isAdmin && (
-              <p className="text-sm text-gray-400 mt-1">
-                "Kullanıcı Yönetimi" sayfasından öğrencilere koç ataması yapabilirsiniz.
-              </p>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* --- 2. HIZLI ERİŞİM & YÖNETİM --- */}
-      <section className="space-y-4 pt-4 border-t">
         <h2 className="text-lg font-semibold text-gray-700">Yönetim Araçları</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
 
@@ -128,7 +96,7 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <h3 className="font-bold text-gray-800">Kullanıcı Yönetimi</h3>
-                <p className="text-xs text-gray-500 mt-1">Koç atamaları, rol değişiklikleri ve kullanıcı listesi.</p>
+                <p className="text-xs text-gray-500 mt-1">Koç atamaları ve rol işlemleri.</p>
               </div>
             </Link>
           )}
@@ -141,7 +109,7 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <h3 className="font-bold text-gray-800">Müfredat Yönetimi</h3>
-                <p className="text-xs text-gray-500 mt-1">Dersler, konular ve üniteleri düzenleyin.</p>
+                <p className="text-xs text-gray-500 mt-1">Ders ve konu düzenlemeleri.</p>
               </div>
             </Link>
           )}
@@ -153,9 +121,7 @@ export default function AdminDashboardPage() {
             </div>
             <div>
               <h3 className="font-bold text-gray-800">Davet Kodları</h3>
-              <p className="text-xs text-gray-500 mt-1">
-                {isAdmin ? 'Yeni kullanıcı davetleri oluşturun.' : 'Öğrencilerinize davet kodu gönderin.'}
-              </p>
+              <p className="text-xs text-gray-500 mt-1">Yeni öğrenci eklemek için davet oluşturun.</p>
             </div>
           </Link>
 
@@ -172,6 +138,61 @@ export default function AdminDashboardPage() {
 
         </div>
       </section>
+
+      {/* ========================================================= */}
+      {/* 2. BÖLÜM: ÖĞRENCİLER VE PERFORMANS (ALTTA)               */}
+      {/* ========================================================= */}
+      <section className="space-y-4 pt-6 border-t">
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-gray-700">
+                <BarChart2 className="text-indigo-600" />
+                <h2 className="text-xl font-semibold">Öğrencilerim & Performans</h2>
+            </div>
+
+            {/* ÖĞRENCİ EKLE BUTONU (Davet sayfasına yönlendirir) */}
+            <Link
+                href="/admin/invites"
+                className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
+            >
+                <UserPlus size={18} />
+                <span className="hidden sm:inline">Öğrenci Ekle</span>
+                <span className="sm:hidden">Ekle</span>
+            </Link>
+        </div>
+
+        {myStudents.length > 0 ? (
+          /* GRID YAPISI:
+             - Mobil (default): grid-cols-1 (Her satırda 1 öğrenci)
+             - Tablet/Masaüstü (md): grid-cols-2 (Her satırda 2 öğrenci - %50)
+             - Geniş Ekran (xl): grid-cols-3 (Her satırda 3 öğrenci - %33)
+             - gap-6: Kartlar arası boşluk
+          */
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {myStudents.map((student) => (
+              <div key={student.id} className="min-w-0">
+                  <AdminStudentCard
+                    studentId={student.id}
+                    studentName={student.full_name || 'İsimsiz Öğrenci'}
+                  />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-12 text-center">
+            <UserCheck className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+            <h3 className="text-lg font-medium text-gray-900">Henüz Öğrenciniz Yok</h3>
+            <p className="text-gray-500 mt-1 mb-4">Takip etmek istediğiniz öğrencileri sisteme ekleyin.</p>
+            <Link
+                href="/admin/invites"
+                className="inline-flex items-center gap-2 text-indigo-600 font-semibold hover:underline"
+            >
+                <UserPlus size={18} />
+                İlk Öğrencini Davet Et
+            </Link>
+          </div>
+        )}
+      </section>
+
     </main>
   );
 }
