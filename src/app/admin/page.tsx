@@ -13,41 +13,92 @@ import {
   LayoutDashboard,
   Settings,
   UserPlus,
-  UserCheck
+  UserCheck,
+  Search,
+  X,
+  PlusCircle,
+  Loader2
 } from 'lucide-react';
 
-// Sizin onayladığınız detaylı kart bileşeni
 import AdminStudentCard from '@/components/AdminStudentCard';
+
+// --- TİP TANIMLARI ---
+type Student = {
+  id: string;
+  full_name: string;
+  coach_id: string | null;
+};
 
 export default function AdminDashboardPage() {
   const { profile, loading } = useAuth();
-  const [myStudents, setMyStudents] = useState<{ id: string; full_name: string }[]>([]);
+  const [myStudents, setMyStudents] = useState<Student[]>([]);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [candidateStudents, setCandidateStudents] = useState<Student[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [addingId, setAddingId] = useState<string | null>(null);
+
   const role = profile?.role;
 
-  // Öğrencileri Çek
-  useEffect(() => {
+  // --- 1. Kendi Öğrencilerimi Getir ---
+  async function fetchMyStudents() {
     if (!profile) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, coach_id')
+      .eq('role', 'student')
+      .eq('coach_id', (profile as any).id)
+      .order('full_name');
 
-    async function fetchStudents() {
-      // "Bana atanmış" öğrencileri bul (coach_id = benim id)
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .eq('role', 'student')
-        .eq('coach_id', (profile as any).id) // ID hatasını önlemek için cast ettik
-        .order('full_name');
+    if (data) setMyStudents(data);
+  }
 
-      if (data) {
-        setMyStudents(data);
-      }
-    }
-
-    fetchStudents();
+  useEffect(() => {
+    fetchMyStudents();
   }, [profile]);
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Yükleniyor...</div>;
+  // --- 2. Tüm Öğrencileri Getir (Modal İçin) ---
+  async function fetchAllStudents() {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, coach_id')
+      .eq('role', 'student')
+      .order('full_name');
 
-  // Yetkisiz giriş koruması
+    if (data) setCandidateStudents(data);
+  }
+
+  // Modal açılınca listeyi çek
+  useEffect(() => {
+    if (isAddModalOpen) {
+      fetchAllStudents();
+    }
+  }, [isAddModalOpen]);
+
+  // --- 3. Öğrenciyi Listeme Ekle (Koç Atama) ---
+  async function addStudentToMyList(studentId: string) {
+    if (!profile) return;
+    setAddingId(studentId);
+
+    // 1. Veritabanında güncelle
+    const { error } = await supabase
+        .from('profiles')
+        .update({ coach_id: (profile as any).id }) // Beni koç yap
+        .eq('id', studentId);
+
+    if (error) {
+        alert('Hata: ' + error.message);
+    } else {
+        // 2. Listeleri güncelle
+        await fetchMyStudents(); // Benim listemi yenile
+        await fetchAllStudents(); // Aday listesini yenile
+
+        // 3. Modalı kapatma (Belki birden fazla ekler diye açık bırakıyorum, isterseniz setIsAddModalOpen(false) yapın)
+    }
+    setAddingId(null);
+  }
+
+  // Yetki Kontrolü
+  if (loading) return <div className="p-8 text-center text-gray-500">Yükleniyor...</div>;
   if (role !== 'admin' && role !== 'coach') {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] space-y-4">
@@ -59,10 +110,15 @@ export default function AdminDashboardPage() {
 
   const isAdmin = role === 'admin';
 
-  return (
-    <main className="space-y-8 pb-12">
+  // Modal Filtreleme
+  const filteredCandidates = candidateStudents.filter(s =>
+    s.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-      {/* --- BAŞLIK --- */}
+  return (
+    <main className="space-y-8 pb-12 relative">
+
+      {/* BAŞLIK */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
         <div className="flex items-center gap-3">
           {isAdmin ? (
@@ -81,67 +137,34 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* 1. BÖLÜM: YÖNETİM ARAÇLARI (ÜSTTE)                       */}
-      {/* ========================================================= */}
+      {/* 1. YÖNETİM ARAÇLARI */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-700">Yönetim Araçları</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-
-          {/* SADECE ADMIN GÖRÜR: Kullanıcı Yönetimi */}
           {isAdmin && (
             <Link href="/admin/users" className="group flex flex-col gap-3 rounded-xl border bg-white p-5 shadow-sm hover:border-indigo-500 hover:shadow-md transition-all">
-              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg w-fit group-hover:scale-110 transition-transform">
-                <Users size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800">Kullanıcı Yönetimi</h3>
-                <p className="text-xs text-gray-500 mt-1">Koç atamaları ve rol işlemleri.</p>
-              </div>
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg w-fit group-hover:scale-110 transition-transform"><Users size={24} /></div>
+              <div><h3 className="font-bold text-gray-800">Kullanıcı Yönetimi</h3><p className="text-xs text-gray-500 mt-1">Koç atamaları ve rol işlemleri.</p></div>
             </Link>
           )}
-
-          {/* SADECE ADMIN GÖRÜR: Müfredat */}
           {isAdmin && (
             <Link href="/admin/topics" className="group flex flex-col gap-3 rounded-xl border bg-white p-5 shadow-sm hover:border-emerald-500 hover:shadow-md transition-all">
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg w-fit group-hover:scale-110 transition-transform">
-                <BookText size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800">Müfredat Yönetimi</h3>
-                <p className="text-xs text-gray-500 mt-1">Ders ve konu düzenlemeleri.</p>
-              </div>
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg w-fit group-hover:scale-110 transition-transform"><BookText size={24} /></div>
+              <div><h3 className="font-bold text-gray-800">Müfredat Yönetimi</h3><p className="text-xs text-gray-500 mt-1">Ders ve konu düzenlemeleri.</p></div>
             </Link>
           )}
-
-          {/* HERKES GÖRÜR: Davet Kodları */}
           <Link href="/admin/invites" className="group flex flex-col gap-3 rounded-xl border bg-white p-5 shadow-sm hover:border-purple-500 hover:shadow-md transition-all">
-            <div className="p-3 bg-purple-50 text-purple-600 rounded-lg w-fit group-hover:scale-110 transition-transform">
-              <Share2 size={24} />
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-800">Davet Kodları</h3>
-              <p className="text-xs text-gray-500 mt-1">Yeni öğrenci eklemek için davet oluşturun.</p>
-            </div>
+            <div className="p-3 bg-purple-50 text-purple-600 rounded-lg w-fit group-hover:scale-110 transition-transform"><Share2 size={24} /></div>
+            <div><h3 className="font-bold text-gray-800">Davet Kodları</h3><p className="text-xs text-gray-500 mt-1">Sisteme yeni öğrenci kaydet.</p></div>
           </Link>
-
-          {/* HERKES GÖRÜR: Raporlar */}
           <Link href="/admin/reports" className="group flex flex-col gap-3 rounded-xl border bg-white p-5 shadow-sm hover:border-blue-500 hover:shadow-md transition-all">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg w-fit group-hover:scale-110 transition-transform">
-              <Settings size={24} />
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-800">Genel Raporlar</h3>
-              <p className="text-xs text-gray-500 mt-1">Detaylı analizler ve tüm kayıtlar.</p>
-            </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg w-fit group-hover:scale-110 transition-transform"><Settings size={24} /></div>
+            <div><h3 className="font-bold text-gray-800">Genel Raporlar</h3><p className="text-xs text-gray-500 mt-1">Detaylı analizler ve kayıtlar.</p></div>
           </Link>
-
         </div>
       </section>
 
-      {/* ========================================================= */}
-      {/* 2. BÖLÜM: ÖĞRENCİLER VE PERFORMANS (ALTTA)               */}
-      {/* ========================================================= */}
+      {/* 2. ÖĞRENCİLER VE PERFORMANS */}
       <section className="space-y-4 pt-6 border-t">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-gray-700">
@@ -149,27 +172,21 @@ export default function AdminDashboardPage() {
                 <h2 className="text-xl font-semibold">Öğrencilerim & Performans</h2>
             </div>
 
-            {/* ÖĞRENCİ EKLE BUTONU (Davet sayfasına yönlendirir) */}
-            <Link
-                href="/admin/invites"
+            {/* ÖĞRENCİ EKLE BUTONU (MODAL AÇAR) */}
+            <button
+                onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
             >
-                <UserPlus size={18} />
+                <PlusCircle size={18} />
                 <span className="hidden sm:inline">Öğrenci Ekle</span>
                 <span className="sm:hidden">Ekle</span>
-            </Link>
+            </button>
         </div>
 
         {myStudents.length > 0 ? (
-          /* GRID YAPISI:
-             - Mobil (default): grid-cols-1 (Her satırda 1 öğrenci)
-             - Tablet/Masaüstü (md): grid-cols-2 (Her satırda 2 öğrenci - %50)
-             - Geniş Ekran (xl): grid-cols-3 (Her satırda 3 öğrenci - %33)
-             - gap-6: Kartlar arası boşluk
-          */
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {myStudents.map((student) => (
-              <div key={student.id} className="min-w-0">
+              <div key={student.id} className="min-w-0 shadow-sm hover:shadow-md transition-shadow">
                   <AdminStudentCard
                     studentId={student.id}
                     studentName={student.full_name || 'İsimsiz Öğrenci'}
@@ -180,18 +197,88 @@ export default function AdminDashboardPage() {
         ) : (
           <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-12 text-center">
             <UserCheck className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-            <h3 className="text-lg font-medium text-gray-900">Henüz Öğrenciniz Yok</h3>
-            <p className="text-gray-500 mt-1 mb-4">Takip etmek istediğiniz öğrencileri sisteme ekleyin.</p>
-            <Link
-                href="/admin/invites"
+            <h3 className="text-lg font-medium text-gray-900">Henüz Listenizde Öğrenci Yok</h3>
+            <p className="text-gray-500 mt-1 mb-4">Sağ üstteki "Öğrenci Ekle" butonunu kullanarak mevcut öğrencileri listenize alın.</p>
+            <button
+                onClick={() => setIsAddModalOpen(true)}
                 className="inline-flex items-center gap-2 text-indigo-600 font-semibold hover:underline"
             >
                 <UserPlus size={18} />
-                İlk Öğrencini Davet Et
-            </Link>
+                Listeye Öğrenci Ekle
+            </button>
           </div>
         )}
       </section>
+
+      {/* === MODAL: ÖĞRENCİ SEÇİMİ === */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]">
+
+            {/* Modal Header */}
+            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-800 text-lg">Öğrenci Seç ve Ekle</h3>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-500 hover:text-red-600 p-1 rounded-full hover:bg-gray-200">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Search */}
+            <div className="p-4 border-b">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="İsim ile ara..."
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Modal List */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {filteredCandidates.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">Öğrenci bulunamadı.</div>
+              ) : (
+                filteredCandidates.map(student => {
+                  const isAlreadyMine = student.coach_id === (profile as any).id;
+                  const hasOtherCoach = student.coach_id && !isAlreadyMine;
+
+                  return (
+                    <div key={student.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-100 transition-all">
+                      <div>
+                        <div className="font-semibold text-gray-800">{student.full_name}</div>
+                        <div className="text-xs text-gray-500">
+                           {isAlreadyMine ? '✅ Zaten listenizde' : (hasOtherCoach ? '⚠️ Başka koçu var' : 'Boşta')}
+                        </div>
+                      </div>
+
+                      {isAlreadyMine ? (
+                        <span className="text-green-600 text-sm font-medium px-3 py-1">Ekli</span>
+                      ) : (
+                        <button
+                          onClick={() => addStudentToMyList(student.id)}
+                          disabled={addingId === student.id}
+                          className="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                        >
+                          {addingId === student.id ? <Loader2 className="animate-spin" size={14}/> : <PlusCircle size={14}/>}
+                          Ekle
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="p-3 bg-gray-50 text-xs text-gray-500 text-center border-t">
+              Listeye eklediğinizde, öğrencinin koçu olarak siz atanırsınız.
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   );
