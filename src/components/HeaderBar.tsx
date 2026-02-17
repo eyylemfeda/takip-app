@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import {
   Plus, BookOpen, Menu as MenuIcon, Shield,
-  User as UserIcon, LogOut, BarChart2, Calendar, LayoutDashboard
+  User as UserIcon, LogOut, UserPlus, BarChart2, Calendar
 } from 'lucide-react';
 
 export default function HeaderBar() {
@@ -19,17 +19,8 @@ export default function HeaderBar() {
   const { session, profile, loading } = useAuth();
 
   const isAuthed = !!session;
-
-  // --- GÜNCELLEME: İSİMLENDİRME MANTIĞI ---
-  // Admin veya Koç ise paneli görsün
-  const showDashboard = (profile?.role === 'admin' || profile?.role === 'coach');
-
-  // Rolüne göre buton ismini belirle
-  const dashboardLabel = profile?.role === 'admin' ? 'Yönetim Paneli' : 'Koç Paneli';
-
-  // Rolüne göre ikon belirle (İsteğe bağlı görsel güzellik)
-  const DashboardIcon = profile?.role === 'admin' ? Shield : LayoutDashboard;
-  // ----------------------------------------
+  // Hem Admin hem Koç için bu değişken true olur
+  const isAdmin = (profile?.role === 'admin' || profile?.role === 'coach');
 
   const displayName = (profile?.full_name || session?.user?.email || '').trim();
 
@@ -116,17 +107,15 @@ export default function HeaderBar() {
             ].join(" ")}
           >
             <div className="py-0.5">
-
-              {/* --- MOBİL MENÜ GÜNCELLEMESİ --- */}
-              {showDashboard && (
+              {isAdmin && (
                 <Link
                     href="/admin"
                     role="menuitem"
                     onClick={() => setMenuOpen(false)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50 font-semibold text-indigo-700 bg-indigo-50/50"
+                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
                 >
-                    <DashboardIcon className="h-4 w-4 text-indigo-600" />
-                    <span>{dashboardLabel}</span>
+                    <Shield className="h-4 w-4 text-red-600" />
+                    <span>Yönetim Paneli</span>
                 </Link>
               )}
 
@@ -142,8 +131,7 @@ export default function HeaderBar() {
                 </Link>
               )}
 
-              {/* Koç veya Admin ise Raporlarım butonunu gizle (zaten panelde var), değilse göster */}
-              {isAuthed && !showDashboard && (
+              {isAuthed && !isAdmin && (
                 <Link
                   href="/reports"
                   role="menuitem"
@@ -155,15 +143,18 @@ export default function HeaderBar() {
                 </Link>
               )}
 
-              <Link
-                href="/records/new"
-                role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Kayıt ekle</span>
-              </Link>
+              {/* GÜNCELLEME: Admin/Koç ise GİZLE */}
+              {isAuthed && !isAdmin && (
+                <Link
+                  href="/records/new"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Kayıt ekle</span>
+                </Link>
+              )}
 
               <Link
                 href="/books"
@@ -209,17 +200,12 @@ export default function HeaderBar() {
           {NameLine}
         </div>
         <div className="flex items-center gap-2">
-
-          {/* --- MASAÜSTÜ MENÜ GÜNCELLEMESİ --- */}
-          {showDashboard && (
+          {isAdmin && (
             <Link
               href="/admin"
-              className={`rounded-md px-3 py-1.5 text-sm text-white font-medium flex items-center gap-2
-                ${profile?.role === 'admin' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}
-              `}
+              className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 font-medium"
             >
-              <DashboardIcon className="h-4 w-4" />
-              {dashboardLabel}
+              Yönetim Paneli
             </Link>
           )}
 
@@ -234,8 +220,7 @@ export default function HeaderBar() {
             </Link>
           )}
 
-          {/* Admin veya Koç değilse Raporlarım'ı göster */}
-          {isAuthed && !showDashboard && (
+          {isAuthed && !isAdmin && (
             <Link
               href="/reports"
               className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 h-[38px]"
@@ -246,13 +231,17 @@ export default function HeaderBar() {
             </Link>
           )}
 
-          <Link
-            href="/records/new"
-            className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 h-[38px]"
-          >
-            <Plus className="h-4 w-4" />
-            Kayıt Ekle
-          </Link>
+          {/* GÜNCELLEME: Admin/Koç ise GİZLE */}
+          {isAuthed && !isAdmin && (
+             <Link
+                href="/records/new"
+                className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 h-[38px]"
+              >
+                <Plus className="h-4 w-4" />
+                Kayıt Ekle
+              </Link>
+          )}
+
           <Link
             href="/books"
             className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 h-[38px]"
