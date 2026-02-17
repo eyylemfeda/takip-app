@@ -11,18 +11,15 @@ import {
 // --- TİPLER ---
 type Profile = {
   id: string;
-  email: string | null;
   full_name: string | null;
   role: string;
   is_active: boolean | null;
-  created_at: string;
+  // created_at alanını kaldırdık, çünkü tabloda olmayabilir
 };
 
 // ==========================================
 // 1. DÜZENLEME PENCERESİ (MODAL) - BAĞIMSIZ BİLEŞEN
 // ==========================================
-// Not: Bu bileşeni ana fonksiyonun DIŞINA aldık.
-// Bu sayede her harf yazdığınızda tüm sayfa yenilenmez ve imleç kaybolmaz.
 function EditUserModal({
   user,
   onClose,
@@ -32,7 +29,6 @@ function EditUserModal({
   onClose: () => void;
   onSave: (id: string, newName: string, newRole: string) => Promise<void>;
 }) {
-  // Modal'ın kendi state'leri
   const [name, setName] = useState(user.full_name || '');
   const [role, setRole] = useState(user.role || 'student');
   const [saving, setSaving] = useState(false);
@@ -55,7 +51,6 @@ function EditUserModal({
         </div>
 
         <div className="p-6 space-y-4">
-          {/* İsim Düzenleme */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Ad Soyad</label>
             <input
@@ -64,11 +59,10 @@ function EditUserModal({
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
               placeholder="Ad Soyad Giriniz"
-              autoFocus // Pencere açılınca otomatik odaklansın
+              autoFocus
             />
           </div>
 
-          {/* Rol Düzenleme */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Kullanıcı Rolü</label>
             <select
@@ -108,27 +102,27 @@ function EditUserModal({
 // 2. ANA SAYFA BİLEŞENİ
 // ==========================================
 export default function AdminUsersPage() {
-  const { profile } = useAuth(); // Sadece yetki kontrolü için
+  const { profile } = useAuth();
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-
-  // Düzenlenecek kullanıcıyı tutan state
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
 
   // Kullanıcıları Çek
   async function fetchUsers() {
     setLoading(true);
-    // profiles tablosunu auth.users ile joinlemek zor olduğu için
-    // genellikle e-posta bilgisini profiles tablosuna da kaydetmek iyi bir pratiktir.
-    // Ancak şimdilik sadece profiles tablosunu çekiyoruz.
+
+    // DÜZELTME BURADA YAPILDI:
+    // .order('created_at') yerine .order('full_name') kullanıldı.
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('full_name', { ascending: true }); // İsim sırasına göre getir (En güvenlisi)
 
     if (error) {
-      console.error('Hata:', error);
+      console.error('Kullanıcılar çekilemedi:', error.message);
+      // Hata olsa bile boş array set edelim ki uygulama çökmesin
+      setUsers([]);
     } else {
       setUsers(data || []);
     }
@@ -153,7 +147,6 @@ export default function AdminUsersPage() {
     if (error) {
       alert('Güncelleme başarısız: ' + error.message);
     } else {
-      // Listeyi yerelde güncelle (Tekrar fetch atmaya gerek kalmasın diye)
       setUsers(prev => prev.map(u =>
         u.id === id ? { ...u, full_name: newName, role: newRole } : u
       ));
@@ -162,10 +155,8 @@ export default function AdminUsersPage() {
 
   // Silme İşlemi
   async function handleDeleteUser(id: string) {
-    if (!confirm('Bu kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
+    if (!confirm('Bu kullanıcıyı silmek istediğinize emin misiniz?')) return;
 
-    // Auth tablosundan silmek sadece server-side mümkündür (service_role key ile).
-    // Burada sadece profili pasife çekiyoruz veya siliyoruz.
     const { error } = await supabase.from('profiles').delete().eq('id', id);
 
     if (error) {
@@ -226,7 +217,10 @@ export default function AdminUsersPage() {
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-500">Kullanıcı bulunamadı.</td>
+                  <td colSpan={4} className="p-8 text-center text-gray-500">
+                     {/* Eğer hata varsa konsola baktıracak bir ipucu */}
+                     Kullanıcı bulunamadı. (Veritabanı bağlantısını kontrol edin)
+                  </td>
                 </tr>
               ) : (
                 filteredUsers.map(user => (
@@ -285,7 +279,6 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      {/* DÜZENLEME MODALI (Koşullu Render) */}
       {editingUser && (
         <EditUserModal
           user={editingUser}
