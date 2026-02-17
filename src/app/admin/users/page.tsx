@@ -3,189 +3,297 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
-import { Save, Trash2, Edit2, X, Check } from 'lucide-react';
+import {
+  Users, Search, Edit2, Trash2, X, Save,
+  CheckCircle, Shield, User as UserIcon, Loader2
+} from 'lucide-react';
 
+// --- TİPLER ---
 type Profile = {
   id: string;
-  full_name: string;
-  role: 'admin' | 'coach' | 'student';
-  coach_id: string | null;
-  username: string;
+  email: string | null;
+  full_name: string | null;
+  role: string;
+  is_active: boolean | null;
+  created_at: string;
 };
 
-export default function UsersManagementPage() {
-  const { profile } = useAuth();
+// ==========================================
+// 1. DÜZENLEME PENCERESİ (MODAL) - BAĞIMSIZ BİLEŞEN
+// ==========================================
+// Not: Bu bileşeni ana fonksiyonun DIŞINA aldık.
+// Bu sayede her harf yazdığınızda tüm sayfa yenilenmez ve imleç kaybolmaz.
+function EditUserModal({
+  user,
+  onClose,
+  onSave
+}: {
+  user: Profile;
+  onClose: () => void;
+  onSave: (id: string, newName: string, newRole: string) => Promise<void>;
+}) {
+  // Modal'ın kendi state'leri
+  const [name, setName] = useState(user.full_name || '');
+  const [role, setRole] = useState(user.role || 'student');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(user.id, name, role);
+    setSaving(false);
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+          <h3 className="font-bold text-gray-800">Kullanıcı Düzenle</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-red-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* İsim Düzenleme */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ad Soyad</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+              placeholder="Ad Soyad Giriniz"
+              autoFocus // Pencere açılınca otomatik odaklansın
+            />
+          </div>
+
+          {/* Rol Düzenleme */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Kullanıcı Rolü</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            >
+              <option value="student">Öğrenci</option>
+              <option value="coach">Koç / Eğitmen</option>
+              <option value="admin">Yönetici (Admin)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-medium"
+          >
+            İptal
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>}
+            Kaydet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 2. ANA SAYFA BİLEŞENİ
+// ==========================================
+export default function AdminUsersPage() {
+  const { profile } = useAuth(); // Sadece yetki kontrolü için
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
-  // Düzenleme için geçici state
-  const [editForm, setEditForm] = useState<Partial<Profile>>({});
+  // Düzenlenecek kullanıcıyı tutan state
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+
+  // Kullanıcıları Çek
+  async function fetchUsers() {
+    setLoading(true);
+    // profiles tablosunu auth.users ile joinlemek zor olduğu için
+    // genellikle e-posta bilgisini profiles tablosuna da kaydetmek iyi bir pratiktir.
+    // Ancak şimdilik sadece profiles tablosunu çekiyoruz.
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Hata:', error);
+    } else {
+      setUsers(data || []);
+    }
+    setLoading(false);
+  }
 
   useEffect(() => {
     fetchUsers();
   }, []);
 
-  async function fetchUsers() {
-    setLoading(true);
-    const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, coach_id, username')
-        .order('full_name');
-    if (data) setUsers(data as Profile[]);
-    setLoading(false);
-  }
-
-  // Gruplama
-  const admins = users.filter(u => u.role === 'admin');
-  const coaches = users.filter(u => u.role === 'coach');
-  const students = users.filter(u => u.role === 'student');
-
-  // Düzenlemeyi Başlat
-  const startEdit = (user: Profile) => {
-    setEditingId(user.id);
-    setEditForm(user);
-  };
-
-  // İptal
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm({});
-  };
-
-  // Kaydet
-  const saveUser = async (id: string) => {
+  // Kaydetme İşlemi
+  async function handleUpdateUser(id: string, newName: string, newRole: string) {
     const { error } = await supabase
-        .from('profiles')
-        .update({
-            full_name: editForm.full_name,
-            role: editForm.role,
-            coach_id: editForm.role === 'student' ? editForm.coach_id : null // Öğrenci değilse koçu sil
-        })
-        .eq('id', id);
+      .from('profiles')
+      .update({
+        full_name: newName,
+        role: newRole,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
 
     if (error) {
-        alert('Hata: ' + error.message);
+      alert('Güncelleme başarısız: ' + error.message);
     } else {
-        setUsers(prev => prev.map(u => u.id === id ? { ...u, ...editForm } as Profile : u));
-        setEditingId(null);
+      // Listeyi yerelde güncelle (Tekrar fetch atmaya gerek kalmasın diye)
+      setUsers(prev => prev.map(u =>
+        u.id === id ? { ...u, full_name: newName, role: newRole } : u
+      ));
     }
-  };
+  }
 
-  // Sil (Sadece profili pasife çeker, auth silmek tehlikeli olabilir diye)
-  // İsterseniz DELETE kodu da yazabilirim ama genelde is_active=false yapılır.
-  const deleteUser = async (id: string) => {
-      if(!confirm("Bu kullanıcıyı silmek istediğinize emin misiniz?")) return;
-      // Gerçek silme için: supabase.from('profiles').delete().eq('id', id)
-      // Ancak referans hataları olabilir. Şimdilik pas geçiyorum veya uyarı veriyorum.
-      alert("Güvenlik nedeniyle silme işlemi şimdilik devre dışı. Rolünü değiştirebilirsiniz.");
-  };
+  // Silme İşlemi
+  async function handleDeleteUser(id: string) {
+    if (!confirm('Bu kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
 
-  // --- TABLO SATIR BİLEŞENİ ---
-  const UserRow = ({ user }: { user: Profile }) => {
-    const isEditing = editingId === user.id;
+    // Auth tablosundan silmek sadece server-side mümkündür (service_role key ile).
+    // Burada sadece profili pasife çekiyoruz veya siliyoruz.
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
 
-    return (
-        <tr className="border-b hover:bg-gray-50">
-            <td className="p-3">
-                {isEditing ? (
-                    <input
-                        className="border p-1 rounded w-full"
-                        value={editForm.full_name || ''}
-                        onChange={e => setEditForm({...editForm, full_name: e.target.value})}
-                    />
-                ) : user.full_name || '-'}
-            </td>
-            <td className="p-3 text-sm text-gray-600">{user.username || '-'}</td>
+    if (error) {
+      alert('Silinemedi: ' + error.message);
+    } else {
+      setUsers(prev => prev.filter(u => u.id !== id));
+    }
+  }
 
-            {/* Koç Seçimi (Sadece Öğrenci Tablosunda görünür veya genel görünür) */}
-            <td className="p-3">
-                {user.role === 'student' && (
-                    isEditing ? (
-                        <select
-                            className="border p-1 rounded w-full text-sm"
-                            value={editForm.coach_id || ''}
-                            onChange={e => setEditForm({...editForm, coach_id: e.target.value || null})}
-                        >
-                            <option value="">Koç Yok</option>
-                            {/* Adminler de koçluk yapabilir diye adminleri de ekledim */}
-                            {admins.map(c => <option key={c.id} value={c.id}>Admin: {c.full_name}</option>)}
-                            {coaches.map(c => <option key={c.id} value={c.id}>Koç: {c.full_name}</option>)}
-                        </select>
-                    ) : (
-                        <span className="text-sm bg-gray-100 px-2 py-1 rounded">
-                            {users.find(u => u.id === user.coach_id)?.full_name || 'Koç Yok'}
-                        </span>
-                    )
-                )}
-            </td>
-
-            {/* Aksiyonlar */}
-            <td className="p-3 flex gap-2 justify-end">
-                {isEditing ? (
-                    <>
-                        <button onClick={() => saveUser(user.id)} className="p-1 text-green-600 hover:bg-green-100 rounded"><Save size={18}/></button>
-                        <button onClick={cancelEdit} className="p-1 text-gray-600 hover:bg-gray-100 rounded"><X size={18}/></button>
-                    </>
-                ) : (
-                    <>
-                        <button onClick={() => startEdit(user)} className="p-1 text-blue-600 hover:bg-blue-100 rounded"><Edit2 size={18}/></button>
-                        <button onClick={() => deleteUser(user.id)} className="p-1 text-red-600 hover:bg-red-100 rounded"><Trash2 size={18}/></button>
-                    </>
-                )}
-            </td>
-        </tr>
-    );
-  };
-
-  if(loading) return <div className="p-8 text-center">Yükleniyor...</div>;
+  // Arama Filtresi
+  const filteredUsers = users.filter(u =>
+    (u.full_name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (u.role || '').toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <main className="space-y-8 pb-10">
-        <h1 className="text-2xl font-bold mb-4">Kullanıcı Yönetimi</h1>
+    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
 
-        {/* 1. ADMINLER */}
-        <section className="bg-white border rounded-lg overflow-hidden">
-            <div className="bg-indigo-50 p-3 font-semibold text-indigo-800 border-b flex justify-between">
-                <span>Adminler</span>
-                <span className="bg-indigo-200 text-xs px-2 py-1 rounded-full">{admins.length}</span>
-            </div>
-            <table className="w-full text-left">
-                <thead><tr className="text-xs text-gray-500 bg-gray-50"><th className="p-3">Ad Soyad</th><th className="p-3">Email/User</th><th className="p-3"></th><th className="p-3"></th></tr></thead>
-                <tbody>{admins.map(u => <UserRow key={u.id} user={u} />)}</tbody>
-            </table>
-        </section>
+      {/* BAŞLIK */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <Users className="text-indigo-600" size={32} />
+            Kullanıcı Yönetimi
+          </h1>
+          <p className="text-gray-500 mt-1">Sistemdeki tüm kullanıcıları görüntüleyin ve düzenleyin.</p>
+        </div>
 
-        {/* 2. KOÇLAR */}
-        <section className="bg-white border rounded-lg overflow-hidden">
-            <div className="bg-emerald-50 p-3 font-semibold text-emerald-800 border-b flex justify-between">
-                <span>Koçlar</span>
-                <span className="bg-emerald-200 text-xs px-2 py-1 rounded-full">{coaches.length}</span>
-            </div>
-            <table className="w-full text-left">
-                <thead><tr className="text-xs text-gray-500 bg-gray-50"><th className="p-3">Ad Soyad</th><th className="p-3">Email/User</th><th className="p-3"></th><th className="p-3"></th></tr></thead>
-                <tbody>{coaches.map(u => <UserRow key={u.id} user={u} />)}</tbody>
-            </table>
-        </section>
+        {/* Arama */}
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="İsim veya rol ara..."
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
 
-        {/* 3. ÖĞRENCİLER */}
-        <section className="bg-white border rounded-lg overflow-hidden">
-            <div className="bg-blue-50 p-3 font-semibold text-blue-800 border-b flex justify-between">
-                <span>Öğrenciler</span>
-                <span className="bg-blue-200 text-xs px-2 py-1 rounded-full">{students.length}</span>
-            </div>
-            <table className="w-full text-left">
-                <thead>
-                    <tr className="text-xs text-gray-500 bg-gray-50">
-                        <th className="p-3 w-1/4">Ad Soyad</th>
-                        <th className="p-3 w-1/4">Email/User</th>
-                        <th className="p-3 w-1/4">Atanan Koç</th>
-                        <th className="p-3 text-right">İşlem</th>
-                    </tr>
-                </thead>
-                <tbody>{students.map(u => <UserRow key={u.id} user={u} />)}</tbody>
-            </table>
-        </section>
-    </main>
+      {/* TABLO */}
+      <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b text-gray-600 text-sm uppercase tracking-wider">
+                <th className="p-4 font-semibold">Kullanıcı</th>
+                <th className="p-4 font-semibold">Rol</th>
+                <th className="p-4 font-semibold">Durum</th>
+                <th className="p-4 font-semibold text-right">İşlemler</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-gray-500">Yükleniyor...</td>
+                </tr>
+              ) : filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-gray-500">Kullanıcı bulunamadı.</td>
+                </tr>
+              ) : (
+                filteredUsers.map(user => (
+                  <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">
+                          {user.full_name ? user.full_name[0].toUpperCase() : '?'}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {user.full_name || <span className="text-gray-400 italic">İsimsiz Kullanıcı</span>}
+                          </div>
+                          <div className="text-xs text-gray-400 font-mono">ID: {user.id.slice(0,8)}...</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border
+                        ${user.role === 'admin' ? 'bg-red-50 text-red-700 border-red-200' :
+                          user.role === 'coach' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          'bg-blue-50 text-blue-700 border-blue-200'}
+                      `}>
+                        {user.role === 'admin' && <Shield size={12}/>}
+                        {user.role === 'coach' && <CheckCircle size={12}/>}
+                        {user.role === 'student' && <UserIcon size={12}/>}
+                        {user.role === 'admin' ? 'Yönetici' : user.role === 'coach' ? 'Eğitmen' : 'Öğrenci'}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded">Aktif</span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setEditingUser(user)}
+                          className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Düzenle"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Sil"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* DÜZENLEME MODALI (Koşullu Render) */}
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSave={handleUpdateUser}
+        />
+      )}
+
+    </div>
   );
 }
