@@ -110,6 +110,7 @@ export default function AdminDashboardPage() {
     }
   }
 
+  // --- YETKİ KONTROLÜ ---
   if (loading) return <div className="p-8 text-center text-gray-500">Yükleniyor...</div>;
 
   if (role !== 'admin' && role !== 'coach') {
@@ -126,8 +127,15 @@ export default function AdminDashboardPage() {
     s.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // --- EKRAN YERLEŞİM MANTIĞI (ÖNEMLİ KISIM) ---
+  // Eğer 3 veya daha fazla öğrenci varsa -> 3 sütun kullan
+  // Eğer 1 veya 2 öğrenci varsa -> 2 sütun kullan (Böylece 2 öğrenci %100 kaplar, 1 öğrenci %50)
+  // Mobilde (md altı) her zaman 1 sütun.
+  const dynamicGridClass = myStudents.length >= 3
+    ? 'grid-cols-1 md:grid-cols-3'
+    : 'grid-cols-1 md:grid-cols-2';
+
   return (
-    // GÜNCELLEME 1: max-w-[1600px] yaparak alanı genişlettik
     <main className="max-w-[1600px] mx-auto px-4 md:px-8 py-6 space-y-8 pb-12 relative">
 
       {/* BAŞLIK */}
@@ -195,12 +203,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {myStudents.length > 0 ? (
-          /* GÜNCELLEME 2: Grid Yapısı
-             - grid-cols-1: Mobil (Alt alta)
-             - md:grid-cols-2: Tablet/Yatay (2'li, tekse %50 kaplar)
-             - xl:grid-cols-3: Geniş Ekran (3'lü, 4. eleman alta geçer 1/3 kaplar)
-          */
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className={`grid gap-6 ${dynamicGridClass}`}>
             {myStudents.map((student) => (
               <div key={student.id} className="relative group/card min-w-0">
                   <AdminStudentCard
