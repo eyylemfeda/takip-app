@@ -32,7 +32,6 @@ type Student = {
 };
 
 export default function AdminDashboardPage() {
-  // ARTIK 'uid' DEĞERİNİ DOĞRUDAN ALIYORUZ (KESİN KİMLİK)
   const { profile, uid, loading } = useAuth();
 
   const [myStudents, setMyStudents] = useState<Student[]>([]);
@@ -45,13 +44,13 @@ export default function AdminDashboardPage() {
 
   // --- 1. Kendi Öğrencilerimi Getir ---
   async function fetchMyStudents() {
-    if (!uid) return; // UID yoksa işlem yapma
+    if (!uid) return;
 
     const { data } = await supabase
       .from('profiles')
       .select('id, full_name, coach_id')
       .eq('role', 'student')
-      .eq('coach_id', uid) // ARTIK 'uid' KULLANIYORUZ
+      .eq('coach_id', uid)
       .order('full_name');
 
     if (data) setMyStudents(data);
@@ -59,7 +58,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchMyStudents();
-  }, [uid]); // UID değişince çalış
+  }, [uid]);
 
   // --- 2. Tüm Öğrencileri Getir (Modal İçin) ---
   async function fetchAllStudents() {
@@ -78,28 +77,25 @@ export default function AdminDashboardPage() {
     }
   }, [isAddModalOpen]);
 
-  // --- 3. Öğrenciyi Listeme Ekle (Koç Atama) ---
+  // --- 3. Öğrenci İşlemleri ---
   async function addStudentToMyList(studentId: string) {
     if (!uid) return;
     setAddingId(studentId);
 
-    // 1. Veritabanında güncelle (Beni koç yap)
     const { error } = await supabase
         .from('profiles')
-        .update({ coach_id: uid }) // Kendi ID'mizi basıyoruz
+        .update({ coach_id: uid })
         .eq('id', studentId);
 
     if (error) {
         alert('Hata: ' + error.message);
     } else {
-        // 2. Listeleri güncelle
         await fetchMyStudents();
         await fetchAllStudents();
     }
     setAddingId(null);
   }
 
-  // --- 4. Öğrenciyi Listemden Çıkar ---
   async function removeStudentFromList(studentId: string) {
     if (!confirm('Bu öğrenciyi listenizden çıkarmak istediğinize emin misiniz?')) return;
 
@@ -114,7 +110,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // Yetki Kontrolü
   if (loading) return <div className="p-8 text-center text-gray-500">Yükleniyor...</div>;
 
   if (role !== 'admin' && role !== 'coach') {
@@ -127,14 +122,13 @@ export default function AdminDashboardPage() {
   }
 
   const isAdmin = role === 'admin';
-
-  // Modal Filtreleme
   const filteredCandidates = candidateStudents.filter(s =>
     s.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <main className="space-y-8 pb-12 relative">
+    // GÜNCELLEME 1: max-w-[1600px] yaparak alanı genişlettik
+    <main className="max-w-[1600px] mx-auto px-4 md:px-8 py-6 space-y-8 pb-12 relative">
 
       {/* BAŞLIK */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
@@ -190,7 +184,6 @@ export default function AdminDashboardPage() {
                 <h2 className="text-xl font-semibold">Öğrencilerim & Performans</h2>
             </div>
 
-            {/* ÖĞRENCİ EKLE BUTONU */}
             <button
                 onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
@@ -202,19 +195,22 @@ export default function AdminDashboardPage() {
         </div>
 
         {myStudents.length > 0 ? (
+          /* GÜNCELLEME 2: Grid Yapısı
+             - grid-cols-1: Mobil (Alt alta)
+             - md:grid-cols-2: Tablet/Yatay (2'li, tekse %50 kaplar)
+             - xl:grid-cols-3: Geniş Ekran (3'lü, 4. eleman alta geçer 1/3 kaplar)
+          */
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {myStudents.map((student) => (
-              <div key={student.id} className="relative group/card">
-                  {/* Kart Bileşeni */}
+              <div key={student.id} className="relative group/card min-w-0">
                   <AdminStudentCard
                     studentId={student.id}
                     studentName={student.full_name || 'İsimsiz Öğrenci'}
                   />
 
-                  {/* Listeden Çıkarma Butonu (Sağ üstte gizli, hoverla görünür) */}
                   <button
                     onClick={() => removeStudentFromList(student.id)}
-                    className="absolute top-2 right-2 p-1.5 bg-red-100 text-red-600 rounded-full opacity-0 group-hover/card:opacity-100 transition-opacity hover:bg-red-200"
+                    className="absolute top-2 right-2 p-1.5 bg-red-100 text-red-600 rounded-full opacity-0 group-hover/card:opacity-100 transition-opacity hover:bg-red-200 z-10"
                     title="Listemden Çıkar"
                   >
                     <X size={14} />
@@ -242,8 +238,6 @@ export default function AdminDashboardPage() {
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]">
-
-            {/* Modal Header */}
             <div className="p-4 border-b flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-gray-800 text-lg">Öğrenci Seç ve Ekle</h3>
               <button onClick={() => setIsAddModalOpen(false)} className="text-gray-500 hover:text-red-600 p-1 rounded-full hover:bg-gray-200">
@@ -251,7 +245,6 @@ export default function AdminDashboardPage() {
               </button>
             </div>
 
-            {/* Modal Search */}
             <div className="p-4 border-b">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
@@ -265,13 +258,11 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Modal List */}
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {filteredCandidates.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">Öğrenci bulunamadı.</div>
               ) : (
                 filteredCandidates.map(student => {
-                  // KİMLİK KONTROLÜ BURADA GÜNCELLENDİ (UID KULLANILIYOR)
                   const isAlreadyMine = student.coach_id === uid;
                   const hasOtherCoach = student.coach_id && !isAlreadyMine;
 
@@ -316,12 +307,11 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="p-3 bg-gray-50 text-xs text-gray-500 text-center border-t">
-              "Ekle" veya "Devral" dediğinizde öğrenci listenize atanır.
+              Listeye eklediğinizde, öğrencinin koçu olarak siz atanırsınız.
             </div>
           </div>
         </div>
       )}
-
     </main>
   );
 }
