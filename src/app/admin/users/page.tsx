@@ -14,6 +14,7 @@ type Profile = {
   full_name: string | null;
   role: string;
   is_active: boolean | null;
+  coach_id: string | null; // Koç ID'si eklendi
 };
 
 // ==========================================
@@ -21,20 +22,25 @@ type Profile = {
 // ==========================================
 function EditUserModal({
   user,
+  allCoaches, // Tüm koçların listesi (Seçim kutusu için)
   onClose,
   onSave
 }: {
   user: Profile;
+  allCoaches: Profile[];
   onClose: () => void;
-  onSave: (id: string, newName: string, newRole: string) => Promise<void>;
+  onSave: (id: string, newName: string, newRole: string, newCoachId: string | null) => Promise<void>;
 }) {
   const [name, setName] = useState(user.full_name || '');
   const [role, setRole] = useState(user.role || 'student');
+  const [coachId, setCoachId] = useState(user.coach_id || ''); // Koç seçimi state'i
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    await onSave(user.id, name, role);
+    // Eğer rol öğrenci değilse koç ID'yi temizle (null yap)
+    const finalCoachId = role === 'student' && coachId ? coachId : null;
+    await onSave(user.id, name, role, finalCoachId);
     setSaving(false);
     onClose();
   }
@@ -50,6 +56,7 @@ function EditUserModal({
         </div>
 
         <div className="p-6 space-y-4">
+          {/* İSİM */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Ad Soyad</label>
             <input
@@ -62,6 +69,7 @@ function EditUserModal({
             />
           </div>
 
+          {/* ROL */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Kullanıcı Rolü</label>
             <select
@@ -74,6 +82,26 @@ function EditUserModal({
               <option value="admin">Yönetici (Admin)</option>
             </select>
           </div>
+
+          {/* KOÇ SEÇİMİ (Sadece Öğrenci Seçiliyse Görünür) */}
+          {role === 'student' && (
+            <div className="animate-in slide-in-from-top-2 duration-200">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Atanmış Koç</label>
+              <select
+                value={coachId}
+                onChange={(e) => setCoachId(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              >
+                <option value="">-- Koç Yok --</option>
+                {allCoaches.map(coach => (
+                  <option key={coach.id} value={coach.id}>
+                    {coach.full_name || 'İsimsiz Koç'}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Bu öğrenciyi hangi koç takip edecek?</p>
+            </div>
+          )}
         </div>
 
         <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
@@ -103,6 +131,7 @@ function EditUserModal({
 function UserSection({
   title,
   users,
+  allUsers, // Koç isimlerini bulmak için tüm kullanıcı listesi lazım
   icon: Icon,
   colorClass,
   onEdit,
@@ -110,12 +139,13 @@ function UserSection({
 }: {
   title: string;
   users: Profile[];
+  allUsers: Profile[];
   icon: any;
   colorClass: string;
   onEdit: (u: Profile) => void;
   onDelete: (id: string) => void;
 }) {
-  if (users.length === 0) return null; // Eğer bu grupta kimse yoksa başlığı da gizle
+  if (users.length === 0) return null;
 
   return (
     <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
@@ -129,64 +159,76 @@ function UserSection({
             <tr className="bg-gray-50 border-b text-gray-600 text-xs uppercase tracking-wider">
               <th className="px-6 py-3 font-semibold">Kullanıcı</th>
               <th className="px-6 py-3 font-semibold">Rol</th>
-              <th className="px-6 py-3 font-semibold">Durum</th>
+              <th className="px-6 py-3 font-semibold">Koç</th> {/* YENİ SÜTUN */}
               <th className="px-6 py-3 font-semibold text-right">İşlemler</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {users.map(user => (
-              <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm
-                      ${user.role === 'admin' ? 'bg-red-100 text-red-700' :
-                        user.role === 'coach' ? 'bg-emerald-100 text-emerald-700' :
-                        'bg-blue-100 text-blue-700'}`}
-                    >
-                      {user.full_name ? user.full_name[0].toUpperCase() : '?'}
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-900 text-sm">
-                        {user.full_name || <span className="text-gray-400 italic">İsimsiz Kullanıcı</span>}
+            {users.map(user => {
+              // Koç ismini bulma mantığı
+              const coachName = user.coach_id
+                ? allUsers.find(u => u.id === user.coach_id)?.full_name || 'Bilinmeyen Koç'
+                : '-';
+
+              return (
+                <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm
+                        ${user.role === 'admin' ? 'bg-red-100 text-red-700' :
+                          user.role === 'coach' ? 'bg-emerald-100 text-emerald-700' :
+                          'bg-blue-100 text-blue-700'}`}
+                      >
+                        {user.full_name ? user.full_name[0].toUpperCase() : '?'}
                       </div>
-                      <div className="text-[10px] text-gray-400 font-mono">ID: {user.id.slice(0,8)}...</div>
+                      <div>
+                        <div className="font-medium text-gray-900 text-sm">
+                          {user.full_name || <span className="text-gray-400 italic">İsimsiz Kullanıcı</span>}
+                        </div>
+                        <div className="text-[10px] text-gray-400 font-mono">ID: {user.id.slice(0,8)}...</div>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border
-                    ${user.role === 'admin' ? 'bg-red-50 text-red-700 border-red-200' :
-                      user.role === 'coach' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                      'bg-blue-50 text-blue-700 border-blue-200'}
-                  `}>
-                    {user.role === 'admin' ? 'Yönetici' : user.role === 'coach' ? 'Eğitmen' : 'Öğrenci'}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full border border-green-200">
-                    AKTİF
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => onEdit(user)}
-                      className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
-                      title="Düzenle"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      onClick={() => onDelete(user.id)}
-                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                      title="Sil"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border
+                      ${user.role === 'admin' ? 'bg-red-50 text-red-700 border-red-200' :
+                        user.role === 'coach' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        'bg-blue-50 text-blue-700 border-blue-200'}
+                    `}>
+                      {user.role === 'admin' ? 'Yönetici' : user.role === 'coach' ? 'Eğitmen' : 'Öğrenci'}
+                    </span>
+                  </td>
+                  {/* KOÇ SÜTUNU */}
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {user.role === 'student' ? (
+                        <span className={`px-2 py-1 rounded border ${user.coach_id ? 'bg-gray-50 border-gray-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+                           {user.coach_id ? coachName : 'Koç Atanmamış'}
+                        </span>
+                    ) : (
+                        <span className="text-gray-300">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => onEdit(user)}
+                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                        title="Düzenle"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => onDelete(user.id)}
+                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        title="Sil"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -225,13 +267,14 @@ export default function AdminUsersPage() {
     fetchUsers();
   }, []);
 
-  // Kaydetme İşlemi
-  async function handleUpdateUser(id: string, newName: string, newRole: string) {
+  // Kaydetme İşlemi (Koç ID dahil)
+  async function handleUpdateUser(id: string, newName: string, newRole: string, newCoachId: string | null) {
     const { error } = await supabase
       .from('profiles')
       .update({
         full_name: newName,
         role: newRole,
+        coach_id: newCoachId, // Koç bilgisini kaydet
         updated_at: new Date().toISOString()
       })
       .eq('id', id);
@@ -240,7 +283,7 @@ export default function AdminUsersPage() {
       alert('Güncelleme başarısız: ' + error.message);
     } else {
       setUsers(prev => prev.map(u =>
-        u.id === id ? { ...u, full_name: newName, role: newRole } : u
+        u.id === id ? { ...u, full_name: newName, role: newRole, coach_id: newCoachId } : u
       ));
     }
   }
@@ -257,16 +300,20 @@ export default function AdminUsersPage() {
     }
   }
 
-  // Önce Arama Filtresi Uygula
+  // Filtreleme
   const filteredUsers = users.filter(u =>
     (u.full_name || '').toLowerCase().includes(search.toLowerCase()) ||
     (u.role || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  // Sonra Gruplara Ayır
+  // Gruplara Ayır
   const admins = filteredUsers.filter(u => u.role === 'admin');
   const coaches = filteredUsers.filter(u => u.role === 'coach');
-  const students = filteredUsers.filter(u => u.role === 'student' || !u.role); // Rolü olmayanları da öğrenci say
+  const students = filteredUsers.filter(u => u.role === 'student' || !u.role);
+
+  // Tüm Koçlar Listesi (Dropdown için)
+  // Hem adminler hem koçlar, "Koç" olarak atanabilsin diye ikisini de alıyorum
+  const potentialCoaches = users.filter(u => u.role === 'coach' || u.role === 'admin');
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
@@ -305,33 +352,32 @@ export default function AdminUsersPage() {
           <p className="text-gray-600">Aradığınız kriterde kullanıcı bulunamadı.</p>
         </div>
       ) : (
-        // GRUPLARI LİSTELE
         <div className="space-y-2">
 
-          {/* 1. YÖNETİCİLER */}
           <UserSection
             title="Yöneticiler"
             users={admins}
+            allUsers={users}
             icon={Shield}
             colorClass="text-red-700"
             onEdit={setEditingUser}
             onDelete={handleDeleteUser}
           />
 
-          {/* 2. EĞİTMENLER */}
           <UserSection
             title="Eğitmenler / Koçlar"
             users={coaches}
+            allUsers={users}
             icon={CheckCircle}
             colorClass="text-emerald-700"
             onEdit={setEditingUser}
             onDelete={handleDeleteUser}
           />
 
-          {/* 3. ÖĞRENCİLER */}
           <UserSection
             title="Öğrenciler"
             users={students}
+            allUsers={users}
             icon={UserIcon}
             colorClass="text-blue-700"
             onEdit={setEditingUser}
@@ -345,6 +391,7 @@ export default function AdminUsersPage() {
       {editingUser && (
         <EditUserModal
           user={editingUser}
+          allCoaches={potentialCoaches} // Koç listesini gönderiyoruz
           onClose={() => setEditingUser(null)}
           onSave={handleUpdateUser}
         />
