@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/AuthContext';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Yönlendirme için eklendi
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { Rec } from '@/types';
@@ -10,12 +11,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList
 } from 'recharts';
 import { QUOTES } from '@/data/quotes';
-//import { useRequireActiveUser } from '@/lib/hooks/useRequireActiveUser';//
 
+/* ================= HELPER & CONSTANTS ================= */
 const RAD = Math.PI / 180;
-function renderPieLabel({
-  cx, cy, midAngle, innerRadius, outerRadius, value,
-}: any) {
+function renderPieLabel({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) {
   const r = innerRadius + (outerRadius - innerRadius) * 0.55;
   const x = cx + r * Math.cos(-midAngle * RAD);
   const y = cy + r * Math.sin(-midAngle * RAD);
@@ -32,25 +31,22 @@ function getTodayQuote() {
   return QUOTES[index];
 }
 
-/* ---------- Zaman yardımcıları ---------- */
 function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 function startOfWeekMonday() {
   const d = new Date(); d.setHours(0, 0, 0, 0);
-  const day = d.getDay(); const diff = (day === 0 ? -6 : 1 - day);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
   d.setDate(d.getDate() + diff); return d;
 }
 function startOfYear() { const d = new Date(); d.setHours(0,0,0,0); d.setMonth(0,1); return d; }
 function startOfMonth() { const d = new Date(); d.setHours(0,0,0,0); d.setDate(1); return d; }
-// Lokal takvim günü (00:00–23:59) → YYYY-MM-DD
 function todayLocalISODate(): string {
   const now = new Date();
   const offsetMs = now.getTimezoneOffset() * 60000;
   return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
 }
 
-/* ---------- Tipler ---------- */
 type Agg = Record<string, number>;
-
 type Book = {
   id: string;
   title: string;
@@ -63,9 +59,7 @@ type Book = {
   updated_at: string | null;
 };
 
-/* ---------- Renk paleti ---------- */
 const COLORS = ['#4F46E5','#10B981','#F59E0B','#EF4444','#3B82F6','#8B5CF6','#14B8A6','#F97316','#6366F1','#84CC16'];
-
 const SUBJECT_ORDER = [
   "Fen Bilimleri",
   "Matematik",
@@ -75,59 +69,35 @@ const SUBJECT_ORDER = [
   "T.C. İnkılap Tarihi",
   "Din Kültürü ve Ahlak Bilgisi",
 ];
-
 const SHORT_LABEL: Record<string, string> = {
   'Din Kültürü ve Ahlak Bilgisi': 'Din Kültürü',
   'T.C. İnkılap Tarihi': 'İnkılap Tarihi',
 };
 
 /* ================================================================== */
-/*                           ANA SAYFA COMPONENT                       */
+/* ANA SAYFA COMPONENT                       */
 /* ================================================================== */
 export default function Home() {
-// 🔒 Oturum + aktiflik koruması
-  //const { uid, loading } = useRequireActiveUser();//
+  const { uid, profile, loading } = useAuth();
+  const router = useRouter();
 
-  // EKLENECEK KOD BAŞLANGICI
-//const [uid, setUid] = useState<string | null>(null);
-//const [loading, setLoading] = useState(true); // Sayfa başlangıçta yükleniyor
+  // --- 1. YÖNLENDİRME MANTIĞI ---
+  useEffect(() => {
+    if (!loading && profile) {
+      if (profile.role === 'admin' || profile.role === 'coach') {
+        router.replace('/admin');
+      }
+    }
+  }, [loading, profile, router]);
 
-//useEffect(() => {
-  //async function getUserSession() {
-    // Supabase'in oturumu tarayıcıdan (localStorage)
-    // güvenle yüklemesini bekler
-    //const { data, error } = await supabase.auth.getUser(); 29.10.2025 değişikliği ile yoruma alındı
-
-    //if (error) {
-     // console.error('Oturum alınırken hata:', error);
-      //setLoading(false);
-      // Merak etmeyin, AuthListener (Kaptan 1)
-      // zaten kullanıcıyı /login'e atacaktır.
-     // return;
-   // }
-
-  //  if (data.user) {
-  //    setUid(data.user.id);
- //   }
-
-    // Oturum kontrolü bitti (isterse 'null' olsun).
-    // Artık sayfa yüklenebilir.
-  //  setLoading(false);
-  //}
-
-  // Bu fonksiyonu sadece sayfa ilk açıldığında bir kez çalıştır
- // getUserSession();
-//}, []);
-// EKLENECEK KOD BİTİŞİ
-  const { uid, loading } = useAuth();
+  // --- STATE TANIMLARI ---
   const [todayRecs, setTodayRecs] = useState<Rec[]>([]);
   const [allRecs, setAllRecs] = useState<Rec[]>([]);
   const [monthBooks, setMonthBooks] = useState<number>(0);
   const [yearBooks,  setYearBooks]  = useState<number>(0);
-
-  // Günlük hedef
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
 
+  // --- VERİ ÇEKME ---
   useEffect(() => {
     if (!uid) return;
 
@@ -157,7 +127,7 @@ export default function Home() {
         setYearBooks(yCount ?? 0);
       }
 
-      // günlük hedef
+      // Günlük hedef
       {
         const { data: p } = await supabase
           .from('profiles')
@@ -188,7 +158,7 @@ export default function Home() {
         setTodayRecs((data ?? []) as any);
       }
 
-      // Tüm records (grafikler)
+      // Tüm records (grafikler için)
       {
         const { data } = await supabase
           .from('records')
@@ -202,7 +172,7 @@ export default function Home() {
     })();
   }, [uid]);
 
-  /* ---------- Grafik / özet verileri ---------- */
+  /* ---------- Grafik / özet verileri hesaplama ---------- */
   const dayKey = useMemo(() => todayLocalISODate(), []);
   const week0  = startOfWeekMonday().getTime();
 
@@ -230,7 +200,6 @@ export default function Home() {
 
   const weeklyTotal = Object.values(bySubject.agg.week).reduce((sum, val) => sum + val, 0);
   const overallTotal = Object.values(bySubject.agg.total).reduce((sum, val) => sum + val, 0);
-
   const todayTotal = useMemo(
     () => todayRecs.reduce((a, r) => a + (r.question_count ?? 0), 0),
     [todayRecs]
@@ -252,17 +221,7 @@ export default function Home() {
     return map;
   }, []);
 
-  const weeklyData = useMemo(() => (
-    SUBJECT_ORDER
-      .map((name) => ({ name, value: bySubject.agg.week[name] || 0 }))
-      .filter((item) => item.value > 0)
-  ), [bySubject]);
-
-  const totalData = useMemo(() => (
-    SUBJECT_ORDER.map((name) => ({ name, value: bySubject.agg.total[name] || 0 }))
-  ), [bySubject]);
-
-  /* ---------- Günün Soruları: ders bazında gruplama + Konuları göster ---------- */
+  /* ---------- Günün Soruları Gruplama ---------- */
   type Row = {
     id: string;
     off_calendar?: boolean | null;
@@ -275,7 +234,6 @@ export default function Home() {
     note?: string | null;
   };
 
-  // Varsayılan: konular açık
   const [showTopics, setShowTopics] = useState(true);
 
   const subjectGroups = useMemo(() => {
@@ -304,7 +262,6 @@ export default function Home() {
         });
       }
       const g = bySub.get(subjectKey)!;
-
       const q = r.question_count ?? 0;
       g.totalQuestions += q;
       g.sessions.push(r);
@@ -317,12 +274,9 @@ export default function Home() {
         g.topics.set(topicKey, cur);
       }
     }
-
-    // Dersleri toplam soruya göre sırala
     return Array.from(bySub.values()).sort((a, b) => b.totalQuestions - a.totalQuestions);
   }, [todayRecs]);
 
-  /* ---------- Bar etiketleri / tooltip ---------- */
   const BarRightLabel = (props: any) => {
     const { x = 0, y = 0, width = 0, height = 0, value } = props;
     return (
@@ -336,12 +290,12 @@ export default function Home() {
     return <div className="rounded-md border bg-white px-2 py-1 text-sm shadow-sm">{payload[0].value}</div>;
   };
 
-  // Günlük hedef ilerleme
   const hasGoal = typeof dailyGoal === 'number' && dailyGoal! > 0;
   const progressPct = hasGoal ? Math.min(100, Math.round((todayTotal / (dailyGoal as number)) * 100)) : 0;
   const goalDone = hasGoal && todayTotal >= (dailyGoal as number);
 
-  // 🔄 Guard
+  // --- RENDER ---
+
   if (loading) {
     return (
       <main className="mx-auto max-w-none md:max-w-5xl px-4 py-6">
@@ -349,10 +303,15 @@ export default function Home() {
       </main>
     );
   }
-  if (!uid) return null; // kanca /login'e yönlendirdi
+
+  // Yönlendirme yapılıyorsa veya uid yoksa boş dön (titreşimi engelle)
+  if (!uid || profile?.role === 'admin' || profile?.role === 'coach') {
+     return <div className="h-screen flex items-center justify-center text-gray-400">Yönlendiriliyorsunuz...</div>;
+  }
 
   return (
     <main className="mx-auto max-w-none md:max-w-5xl px-0 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+
       {/* === AKTİF KİTAPLAR === */}
       <section className="rounded-xl border bg-white px-2 pt-1 pb-2 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
@@ -367,12 +326,10 @@ export default function Home() {
 
       {/* === GÜNLÜK (liste + pasta) === */}
       <section className="grid gap-4 md:grid-cols-3">
-        {/* Sol: Günlük liste (Ders bazında gruplu) */}
+        {/* Sol: Günlük liste */}
         <div className="md:col-span-2 rounded-xl border bg-white px-2 pt-1 pb-2 shadow-sm space-y-2">
-          {/* Başlık + Progress */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-xl font-semibold">Günün Soruları</h2>
-
               {hasGoal && (
                 <div className="w-full sm:w-80">
                   <div
@@ -384,20 +341,16 @@ export default function Home() {
                     aria-label="Günlük soru hedefi ilerleme"
                   >
                     <div
-                      className={`absolute left-0 top-0 h-full transition-[width] duration-500
-                        ${goalDone ? 'bg-emerald-600' : 'bg-cyan-300'}`} //burada amber rengi progress bar rengi
+                      className={`absolute left-0 top-0 h-full transition-[width] duration-500 ${goalDone ? 'bg-emerald-600' : 'bg-cyan-300'}`}
                       style={{ width: `${progressPct}%` }}
                     />
-                    <div className="absolute inset-0 grid place-items-center text-[13px] font-semibold text-black/95"> {/*yazıyı siyah yaptık*/}
-                      {goalDone
-                        ? '🎉 Hedef tamam!'
-                        : `Hedef ${dailyGoal} · Biten %${progressPct}`}
+                    <div className="absolute inset-0 grid place-items-center text-[13px] font-semibold text-black/95">
+                       {goalDone ? '🎉 Hedef tamam!' : `Hedef ${dailyGoal} · Biten %${progressPct}`}
                     </div>
                   </div>
                 </div>
               )}
             </div>
-
 
           {/* DERS BAZINDA LİSTE */}
           {subjectGroups.length === 0 ? (
@@ -415,13 +368,9 @@ export default function Home() {
               {subjectGroups.map((g, i) => (
                 <li key={i} className="rounded-lg border p-2">
                   <div className="flex justify-between items-center">
-                    {/* Sol: Ders adı */}
                     <span className="font-medium">{g.subjectName}</span>
-                    {/* Sağ: NN soru (aynı font/kalınlık) */}
                     <span className="font-medium">{g.totalQuestions} soru</span>
                   </div>
-
-                  {/* Konular – varsayılan AÇIK */}
                   {showTopics && g.topics.size > 0 && (
                     <ul className="mt-1 text-sm text-gray-700">
                       {Array.from(g.topics.values()).map((t, idx) => (
@@ -431,8 +380,6 @@ export default function Home() {
                   )}
                 </li>
               ))}
-
-              {/* TOPLAM (sağda aynı hizada) */}
               <li className="rounded-lg border p-1 bg-lime-300">
                 <div className="flex justify-between items-center font-semibold">
                   <span>TOPLAM</span>
@@ -442,7 +389,6 @@ export default function Home() {
             </ul>
           )}
 
-          {/* Anahtar: Konuları göster (varsayılan açık) */}
           <div className="mt-2">
             <label className="inline-flex items-center gap-2 text-sm text-gray-700">
               <input
@@ -468,7 +414,7 @@ export default function Home() {
                     dataKey="value"
                     nameKey="name"
                     outerRadius="82%"
-                    cy="52%"            // grafiği çok aşağı itmeden ortala
+                    cy="52%"
                     label={renderPieLabel}
                     labelLine={false}
                     minAngle={5}
@@ -478,15 +424,13 @@ export default function Home() {
                     ))}
                   </Pie>
                   <RTooltip />
-
-                  {/* Negatif margin'i kaldır; belirgin bir yükseklik ver ki taşmasın */}
                   <Legend
                     layout="horizontal"
                     verticalAlign="bottom"
                     align="center"
                     iconType="circle"
-                    height={22}                      // alt boşluğu rezerve eder
-                    wrapperStyle={{ marginTop: 2 }}  // çok az yukarı çek
+                    height={22}
+                    wrapperStyle={{ marginTop: 2 }}
                     formatter={(value: string) => SHORT_LABEL[value] ?? value}
                   />
                 </PieChart>
@@ -567,6 +511,7 @@ export default function Home() {
           );
         })()}
       </section>
+
       {/* === ALT BİLGİ / FOOTER === */}
       <footer className="text-center text-xs text-gray-500 mt-4 pb-4">
         © {new Date().getFullYear()} — <span className="font-medium text-gray-700">derstakibim.com</span> ve Öğrenci Takip Uygulamasının tüm hakları <span className="font-medium text-gray-700">Hakan OBALI</span> 'ya aittir.
@@ -577,9 +522,8 @@ export default function Home() {
 
 
 /* ================================================================== */
-/*           AKTİF KİTAPLAR – tek kart + “Bugün okuduğum” girişi       */
+/* AKTİF KİTAPLAR – tek kart + “Bugün okuduğum” girişi       */
 function ActiveBooksInline({ uid }: { uid: string | null }) {
-  // const { uid } = useRequireActiveUser(); // <-- BU SATIRI TAMAMEN SİLİN
   const [rows, setRows] = useState<Book[]>([]);
   const [sumByTitle, setSumByTitle] = useState<Record<string, number>>({});
   const [lastPageByTitle, setLastPageByTitle] = useState<Record<string, number>>({});
@@ -591,9 +535,8 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
 
   useEffect(() => {
     if (!uid) return;
-
     (async () => {
-      // Kitaplar — SADECE bu kullanıcı
+      // Kitaplar
       const { data: books } = await supabase
         .from('books')
         .select('id,title,author,total_pages,cover_url,is_finished,status,created_at,updated_at')
@@ -605,7 +548,7 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
       ) as Book[];
       setRows(active);
 
-      // Okuma özetleri — SADECE bu kullanıcı
+      // Okuma özetleri
       const { data: logs } = await supabase
         .from('reading_logs')
         .select('title,pages,page_number,created_at')
@@ -614,7 +557,6 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
       const totalMap: Record<string, number> = {};
       const lastMap: Record<string, number> = {};
       const todayMap: Record<string, number> = {};
-
       const today0 = startOfTodayLocal().getTime();
 
       (logs ?? []).forEach((x: any) => {
@@ -628,7 +570,6 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
             todayMap[t] = (todayMap[t] || 0) + p;
           }
         }
-
         if (x.page_number != null) {
           const pn = Number(x.page_number);
           if (!Number.isNaN(pn)) lastMap[t] = Math.max(lastMap[t] || 0, pn);
@@ -650,6 +591,7 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
 
     const alreadyRead = sumByTitle[b.title] || 0;
     const delta = current - alreadyRead;
+
     if (delta <= 0) {
       return alert(`Girilen sayfa (${current}) mevcut toplam okumanın (${alreadyRead}) altında. Daha yüksek bir değer girin.`);
     }
@@ -695,7 +637,7 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
   return (
     <div className="rounded-xl bg-white">
       <div className="flex items-start gap-3">
-        {/* Kapak — yalnızca PC'de büyütüldü */}
+        {/* Kapak */}
         <div className="h-[140px] w-[110px] md:h-[85px] md:w-[70px] overflow-hidden rounded border bg-gray-100 shrink-0">
           {b.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -706,20 +648,17 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
         </div>
 
         <div className="min-w-0 flex-1">
-          {/* === Başlık + Yazar === */}
-          {/* Mobil: mevcut iki satır (hiç değişmedi) */}
+          {/* Başlık + Yazar */}
           <div className="md:hidden">
             <div className="truncate text-sm font-medium">{b.title}</div>
             <div className="truncate text-xs text-gray-600">{b.author ?? '-'}</div>
           </div>
-          {/* PC: tek satırda başlık — yazar */}
           <div className="hidden md:flex items-baseline gap-2">
             <div className="truncate text-sm font-medium">{b.title}</div>
             <span className="text-xs text-gray-600 shrink-0">— {b.author ?? '-'}</span>
           </div>
 
-          {/* === Bilgiler Satırı === */}
-          {/* Mobil: eski iki satır (değişmedi) */}
+          {/* Bilgiler Satırı */}
           <div className="mt-1 grid gap-1 text-xs md:hidden">
             <div className="text-emerald-700 text-sm font-semibold">
               Bugün Okunan: <b>{today}</b> Sayfa
@@ -728,7 +667,6 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
               Toplam Okunan: <b>{read}</b>{total ? <> · Kalan: <b>{remain}</b></> : null}
             </div>
           </div>
-          {/* PC: üç değer tek satır */}
           <div className="hidden md:flex items-center gap-4 mt-1 text-xs">
             <div className="text-emerald-700 text-sm font-semibold">
               Bugün Okunan: <b>{today}</b> Sayfa
@@ -737,9 +675,8 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
             {total ? <div>Kalan: <b>{remain}</b> Sayfa</div> : null}
           </div>
 
-          {/* === Progress bar + Kaldığım Sayfa (PC sağda, mobil altta) === */}
+          {/* Progress bar + Kaldığım Sayfa */}
           <div className="mt-1 md:flex md:items-center md:gap-3">
-            {/* Progress bar */}
             <div
               className="relative w-full overflow-hidden rounded-full border bg-white h-5 sm:h-6 md:flex-1"
               role="progressbar"
@@ -757,7 +694,7 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
               </div>
             </div>
 
-            {/* MOBİL: barın ALTINDA (görünür), PC’de gizli */}
+            {/* MOBİL */}
             <div className="mt-1 flex items-center justify-between gap-2 md:hidden">
               <span className="text-xs text-gray-900">Kaldığım Sayfa:</span>
               <div className="flex items-center gap-2">
@@ -782,7 +719,7 @@ function ActiveBooksInline({ uid }: { uid: string | null }) {
               </div>
             </div>
 
-            {/* PC: barın SAĞINDA (görünür), mobilde gizli */}
+            {/* PC */}
             <div className="mt-1 hidden md:flex items-center gap-2 shrink-0">
               <span className="text-xs text-gray-900">Kaldığım Sayfa:</span>
               <label htmlFor={inputId2} className="sr-only">Kaldığım sayfa</label>

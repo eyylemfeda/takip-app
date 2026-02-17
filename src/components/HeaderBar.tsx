@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import {
   Plus, BookOpen, Menu as MenuIcon, Shield,
-  User as UserIcon, LogOut, UserPlus, BarChart2, Calendar // Calendar eklendi
+  User as UserIcon, LogOut, BarChart2, Calendar, LayoutDashboard
 } from 'lucide-react';
 
 export default function HeaderBar() {
@@ -19,7 +19,18 @@ export default function HeaderBar() {
   const { session, profile, loading } = useAuth();
 
   const isAuthed = !!session;
-  const isAdmin = (profile?.role === 'admin' || profile?.role === 'coach');
+
+  // --- GÜNCELLEME: İSİMLENDİRME MANTIĞI ---
+  // Admin veya Koç ise paneli görsün
+  const showDashboard = (profile?.role === 'admin' || profile?.role === 'coach');
+
+  // Rolüne göre buton ismini belirle
+  const dashboardLabel = profile?.role === 'admin' ? 'Yönetim Paneli' : 'Koç Paneli';
+
+  // Rolüne göre ikon belirle (İsteğe bağlı görsel güzellik)
+  const DashboardIcon = profile?.role === 'admin' ? Shield : LayoutDashboard;
+  // ----------------------------------------
+
   const displayName = (profile?.full_name || session?.user?.email || '').trim();
 
   async function handleLogout() {
@@ -105,21 +116,20 @@ export default function HeaderBar() {
             ].join(" ")}
           >
             <div className="py-0.5">
-              {isAdmin && (
-                <>
-                  <Link
+
+              {/* --- MOBİL MENÜ GÜNCELLEMESİ --- */}
+              {showDashboard && (
+                <Link
                     href="/admin"
                     role="menuitem"
                     onClick={() => setMenuOpen(false)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50"
-                  >
-                    <Shield className="h-4 w-4" />
-                    <span>Admin Paneli</span>
-                  </Link>
-                </>
+                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm hover:bg-gray-50 font-semibold text-indigo-700 bg-indigo-50/50"
+                >
+                    <DashboardIcon className="h-4 w-4 text-indigo-600" />
+                    <span>{dashboardLabel}</span>
+                </Link>
               )}
 
-              {/* YENİ: Çalışma Programım (Mobilde herkes görür) */}
               {isAuthed && (
                  <Link
                   href="/planner"
@@ -132,7 +142,8 @@ export default function HeaderBar() {
                 </Link>
               )}
 
-              {isAuthed && !isAdmin && (
+              {/* Koç veya Admin ise Raporlarım butonunu gizle (zaten panelde var), değilse göster */}
+              {isAuthed && !showDashboard && (
                 <Link
                   href="/reports"
                   role="menuitem"
@@ -198,18 +209,20 @@ export default function HeaderBar() {
           {NameLine}
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <>
-              <Link
-                href="/admin"
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700"
-              >
-                Admin Paneli
-              </Link>
-            </>
+
+          {/* --- MASAÜSTÜ MENÜ GÜNCELLEMESİ --- */}
+          {showDashboard && (
+            <Link
+              href="/admin"
+              className={`rounded-md px-3 py-1.5 text-sm text-white font-medium flex items-center gap-2
+                ${profile?.role === 'admin' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}
+              `}
+            >
+              <DashboardIcon className="h-4 w-4" />
+              {dashboardLabel}
+            </Link>
           )}
 
-          {/* YENİ: Çalışma Programım (İki satır destekli buton) */}
           {isAuthed && (
             <Link
               href="/planner"
@@ -221,7 +234,8 @@ export default function HeaderBar() {
             </Link>
           )}
 
-          {isAuthed && !isAdmin && (
+          {/* Admin veya Koç değilse Raporlarım'ı göster */}
+          {isAuthed && !showDashboard && (
             <Link
               href="/reports"
               className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 h-[38px]"
