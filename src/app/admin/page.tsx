@@ -17,7 +17,9 @@ import {
   Search,
   X,
   PlusCircle,
-  Loader2
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 import AdminStudentCard from '@/components/AdminStudentCard';
@@ -30,7 +32,9 @@ type Student = {
 };
 
 export default function AdminDashboardPage() {
-  const { profile, loading } = useAuth();
+  // ARTIK 'uid' DEĞERİNİ DOĞRUDAN ALIYORUZ (KESİN KİMLİK)
+  const { profile, uid, loading } = useAuth();
+
   const [myStudents, setMyStudents] = useState<Student[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [candidateStudents, setCandidateStudents] = useState<Student[]>([]);
@@ -41,12 +45,13 @@ export default function AdminDashboardPage() {
 
   // --- 1. Kendi Öğrencilerimi Getir ---
   async function fetchMyStudents() {
-    if (!profile) return;
+    if (!uid) return; // UID yoksa işlem yapma
+
     const { data } = await supabase
       .from('profiles')
       .select('id, full_name, coach_id')
       .eq('role', 'student')
-      .eq('coach_id', (profile as any).id)
+      .eq('coach_id', uid) // ARTIK 'uid' KULLANIYORUZ
       .order('full_name');
 
     if (data) setMyStudents(data);
@@ -54,7 +59,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchMyStudents();
-  }, [profile]);
+  }, [uid]); // UID değişince çalış
 
   // --- 2. Tüm Öğrencileri Getir (Modal İçin) ---
   async function fetchAllStudents() {
@@ -67,7 +72,6 @@ export default function AdminDashboardPage() {
     if (data) setCandidateStudents(data);
   }
 
-  // Modal açılınca listeyi çek
   useEffect(() => {
     if (isAddModalOpen) {
       fetchAllStudents();
@@ -76,29 +80,43 @@ export default function AdminDashboardPage() {
 
   // --- 3. Öğrenciyi Listeme Ekle (Koç Atama) ---
   async function addStudentToMyList(studentId: string) {
-    if (!profile) return;
+    if (!uid) return;
     setAddingId(studentId);
 
-    // 1. Veritabanında güncelle
+    // 1. Veritabanında güncelle (Beni koç yap)
     const { error } = await supabase
         .from('profiles')
-        .update({ coach_id: (profile as any).id }) // Beni koç yap
+        .update({ coach_id: uid }) // Kendi ID'mizi basıyoruz
         .eq('id', studentId);
 
     if (error) {
         alert('Hata: ' + error.message);
     } else {
         // 2. Listeleri güncelle
-        await fetchMyStudents(); // Benim listemi yenile
-        await fetchAllStudents(); // Aday listesini yenile
-
-        // 3. Modalı kapatma (Belki birden fazla ekler diye açık bırakıyorum, isterseniz setIsAddModalOpen(false) yapın)
+        await fetchMyStudents();
+        await fetchAllStudents();
     }
     setAddingId(null);
   }
 
+  // --- 4. Öğrenciyi Listemden Çıkar ---
+  async function removeStudentFromList(studentId: string) {
+    if (!confirm('Bu öğrenciyi listenizden çıkarmak istediğinize emin misiniz?')) return;
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({ coach_id: null })
+        .eq('id', studentId);
+
+    if (!error) {
+        await fetchMyStudents();
+        await fetchAllStudents();
+    }
+  }
+
   // Yetki Kontrolü
   if (loading) return <div className="p-8 text-center text-gray-500">Yükleniyor...</div>;
+
   if (role !== 'admin' && role !== 'coach') {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] space-y-4">
@@ -172,7 +190,7 @@ export default function AdminDashboardPage() {
                 <h2 className="text-xl font-semibold">Öğrencilerim & Performans</h2>
             </div>
 
-            {/* ÖĞRENCİ EKLE BUTONU (MODAL AÇAR) */}
+            {/* ÖĞRENCİ EKLE BUTONU */}
             <button
                 onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
@@ -186,11 +204,21 @@ export default function AdminDashboardPage() {
         {myStudents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {myStudents.map((student) => (
-              <div key={student.id} className="min-w-0 shadow-sm hover:shadow-md transition-shadow">
+              <div key={student.id} className="relative group/card">
+                  {/* Kart Bileşeni */}
                   <AdminStudentCard
                     studentId={student.id}
                     studentName={student.full_name || 'İsimsiz Öğrenci'}
                   />
+
+                  {/* Listeden Çıkarma Butonu (Sağ üstte gizli, hoverla görünür) */}
+                  <button
+                    onClick={() => removeStudentFromList(student.id)}
+                    className="absolute top-2 right-2 p-1.5 bg-red-100 text-red-600 rounded-full opacity-0 group-hover/card:opacity-100 transition-opacity hover:bg-red-200"
+                    title="Listemden Çıkar"
+                  >
+                    <X size={14} />
+                  </button>
               </div>
             ))}
           </div>
@@ -243,28 +271,42 @@ export default function AdminDashboardPage() {
                 <div className="text-center py-8 text-gray-500">Öğrenci bulunamadı.</div>
               ) : (
                 filteredCandidates.map(student => {
-                  const isAlreadyMine = student.coach_id === (profile as any).id;
+                  // KİMLİK KONTROLÜ BURADA GÜNCELLENDİ (UID KULLANILIYOR)
+                  const isAlreadyMine = student.coach_id === uid;
                   const hasOtherCoach = student.coach_id && !isAlreadyMine;
 
                   return (
                     <div key={student.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-100 transition-all">
                       <div>
                         <div className="font-semibold text-gray-800">{student.full_name}</div>
-                        <div className="text-xs text-gray-500">
-                           {isAlreadyMine ? '✅ Zaten listenizde' : (hasOtherCoach ? '⚠️ Başka koçu var' : 'Boşta')}
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                           {isAlreadyMine && <span className="text-green-600 flex items-center gap-0.5"><CheckCircle2 size={12}/> Listenizde</span>}
+                           {hasOtherCoach && <span className="text-orange-500 flex items-center gap-0.5"><AlertCircle size={12}/> Başka koçu var</span>}
+                           {!student.coach_id && <span>Koçu yok</span>}
                         </div>
                       </div>
 
                       {isAlreadyMine ? (
-                        <span className="text-green-600 text-sm font-medium px-3 py-1">Ekli</span>
+                        <button
+                            onClick={() => removeStudentFromList(student.id)}
+                            className="text-gray-400 hover:text-red-600 p-2"
+                            title="Listeden Çıkar"
+                        >
+                            <X size={18} />
+                        </button>
                       ) : (
                         <button
                           onClick={() => addStudentToMyList(student.id)}
                           disabled={addingId === student.id}
-                          className="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                          className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-2 transition-colors
+                            ${hasOtherCoach
+                                ? 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200'
+                                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                            }
+                          `}
                         >
                           {addingId === student.id ? <Loader2 className="animate-spin" size={14}/> : <PlusCircle size={14}/>}
-                          Ekle
+                          {hasOtherCoach ? 'Devral' : 'Ekle'}
                         </button>
                       )}
                     </div>
@@ -274,7 +316,7 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="p-3 bg-gray-50 text-xs text-gray-500 text-center border-t">
-              Listeye eklediğinizde, öğrencinin koçu olarak siz atanırsınız.
+              "Ekle" veya "Devral" dediğinizde öğrenci listenize atanır.
             </div>
           </div>
         </div>
