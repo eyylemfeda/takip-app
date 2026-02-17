@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import {
   Users, Search, Edit2, Trash2, X, Save,
-  CheckCircle, Shield, User as UserIcon, Loader2
+  CheckCircle, Shield, User as UserIcon, Loader2, AlertCircle
 } from 'lucide-react';
 
 // --- TİPLER ---
@@ -14,11 +14,10 @@ type Profile = {
   full_name: string | null;
   role: string;
   is_active: boolean | null;
-  // created_at alanını kaldırdık, çünkü tabloda olmayabilir
 };
 
 // ==========================================
-// 1. DÜZENLEME PENCERESİ (MODAL) - BAĞIMSIZ BİLEŞEN
+// 1. DÜZENLEME PENCERESİ (MODAL)
 // ==========================================
 function EditUserModal({
   user,
@@ -42,7 +41,7 @@ function EditUserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
           <h3 className="font-bold text-gray-800">Kullanıcı Düzenle</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-red-600">
@@ -99,7 +98,104 @@ function EditUserModal({
 }
 
 // ==========================================
-// 2. ANA SAYFA BİLEŞENİ
+// 2. KULLANICI LİSTESİ TABLOSU (Alt Bileşen)
+// ==========================================
+function UserSection({
+  title,
+  users,
+  icon: Icon,
+  colorClass,
+  onEdit,
+  onDelete
+}: {
+  title: string;
+  users: Profile[];
+  icon: any;
+  colorClass: string;
+  onEdit: (u: Profile) => void;
+  onDelete: (id: string) => void;
+}) {
+  if (users.length === 0) return null; // Eğer bu grupta kimse yoksa başlığı da gizle
+
+  return (
+    <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
+      <div className={`px-6 py-4 border-b flex items-center gap-2 ${colorClass} bg-opacity-5`}>
+        <Icon className={colorClass.replace('bg-', 'text-')} size={20} />
+        <h2 className={`font-bold text-lg ${colorClass.replace('bg-', 'text-')}`}>{title} ({users.length})</h2>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b text-gray-600 text-xs uppercase tracking-wider">
+              <th className="px-6 py-3 font-semibold">Kullanıcı</th>
+              <th className="px-6 py-3 font-semibold">Rol</th>
+              <th className="px-6 py-3 font-semibold">Durum</th>
+              <th className="px-6 py-3 font-semibold text-right">İşlemler</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {users.map(user => (
+              <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm
+                      ${user.role === 'admin' ? 'bg-red-100 text-red-700' :
+                        user.role === 'coach' ? 'bg-emerald-100 text-emerald-700' :
+                        'bg-blue-100 text-blue-700'}`}
+                    >
+                      {user.full_name ? user.full_name[0].toUpperCase() : '?'}
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900 text-sm">
+                        {user.full_name || <span className="text-gray-400 italic">İsimsiz Kullanıcı</span>}
+                      </div>
+                      <div className="text-[10px] text-gray-400 font-mono">ID: {user.id.slice(0,8)}...</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border
+                    ${user.role === 'admin' ? 'bg-red-50 text-red-700 border-red-200' :
+                      user.role === 'coach' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      'bg-blue-50 text-blue-700 border-blue-200'}
+                  `}>
+                    {user.role === 'admin' ? 'Yönetici' : user.role === 'coach' ? 'Eğitmen' : 'Öğrenci'}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full border border-green-200">
+                    AKTİF
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => onEdit(user)}
+                      className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                      title="Düzenle"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(user.id)}
+                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                      title="Sil"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 3. ANA SAYFA BİLEŞENİ
 // ==========================================
 export default function AdminUsersPage() {
   const { profile } = useAuth();
@@ -111,17 +207,13 @@ export default function AdminUsersPage() {
   // Kullanıcıları Çek
   async function fetchUsers() {
     setLoading(true);
-
-    // DÜZELTME BURADA YAPILDI:
-    // .order('created_at') yerine .order('full_name') kullanıldı.
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .order('full_name', { ascending: true }); // İsim sırasına göre getir (En güvenlisi)
+      .order('full_name', { ascending: true });
 
     if (error) {
       console.error('Kullanıcılar çekilemedi:', error.message);
-      // Hata olsa bile boş array set edelim ki uygulama çökmesin
       setUsers([]);
     } else {
       setUsers(data || []);
@@ -158,7 +250,6 @@ export default function AdminUsersPage() {
     if (!confirm('Bu kullanıcıyı silmek istediğinize emin misiniz?')) return;
 
     const { error } = await supabase.from('profiles').delete().eq('id', id);
-
     if (error) {
       alert('Silinemedi: ' + error.message);
     } else {
@@ -166,23 +257,28 @@ export default function AdminUsersPage() {
     }
   }
 
-  // Arama Filtresi
+  // Önce Arama Filtresi Uygula
   const filteredUsers = users.filter(u =>
     (u.full_name || '').toLowerCase().includes(search.toLowerCase()) ||
     (u.role || '').toLowerCase().includes(search.toLowerCase())
   );
 
+  // Sonra Gruplara Ayır
+  const admins = filteredUsers.filter(u => u.role === 'admin');
+  const coaches = filteredUsers.filter(u => u.role === 'coach');
+  const students = filteredUsers.filter(u => u.role === 'student' || !u.role); // Rolü olmayanları da öğrenci say
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
 
       {/* BAŞLIK */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
             <Users className="text-indigo-600" size={32} />
             Kullanıcı Yönetimi
           </h1>
-          <p className="text-gray-500 mt-1">Sistemdeki tüm kullanıcıları görüntüleyin ve düzenleyin.</p>
+          <p className="text-gray-500 mt-1">Sistemdeki tüm kullanıcıları rollere göre yönetin.</p>
         </div>
 
         {/* Arama */}
@@ -190,7 +286,7 @@ export default function AdminUsersPage() {
           <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
           <input
             type="text"
-            placeholder="İsim veya rol ara..."
+            placeholder="İsim ile ara..."
             className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -198,87 +294,54 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      {/* TABLO */}
-      <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b text-gray-600 text-sm uppercase tracking-wider">
-                <th className="p-4 font-semibold">Kullanıcı</th>
-                <th className="p-4 font-semibold">Rol</th>
-                <th className="p-4 font-semibold">Durum</th>
-                <th className="p-4 font-semibold text-right">İşlemler</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-500">Yükleniyor...</td>
-                </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-500">
-                     {/* Eğer hata varsa konsola baktıracak bir ipucu */}
-                     Kullanıcı bulunamadı. (Veritabanı bağlantısını kontrol edin)
-                  </td>
-                </tr>
-              ) : (
-                filteredUsers.map(user => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">
-                          {user.full_name ? user.full_name[0].toUpperCase() : '?'}
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {user.full_name || <span className="text-gray-400 italic">İsimsiz Kullanıcı</span>}
-                          </div>
-                          <div className="text-xs text-gray-400 font-mono">ID: {user.id.slice(0,8)}...</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border
-                        ${user.role === 'admin' ? 'bg-red-50 text-red-700 border-red-200' :
-                          user.role === 'coach' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                          'bg-blue-50 text-blue-700 border-blue-200'}
-                      `}>
-                        {user.role === 'admin' && <Shield size={12}/>}
-                        {user.role === 'coach' && <CheckCircle size={12}/>}
-                        {user.role === 'student' && <UserIcon size={12}/>}
-                        {user.role === 'admin' ? 'Yönetici' : user.role === 'coach' ? 'Eğitmen' : 'Öğrenci'}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded">Aktif</span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setEditingUser(user)}
-                          className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="Düzenle"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Sil"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {loading ? (
+        <div className="p-12 text-center text-gray-500 flex flex-col items-center">
+          <Loader2 className="animate-spin mb-2" size={32} />
+          Veriler yükleniyor...
         </div>
-      </div>
+      ) : filteredUsers.length === 0 ? (
+        <div className="p-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300">
+          <AlertCircle className="mx-auto h-10 w-10 text-gray-400 mb-2" />
+          <p className="text-gray-600">Aradığınız kriterde kullanıcı bulunamadı.</p>
+        </div>
+      ) : (
+        // GRUPLARI LİSTELE
+        <div className="space-y-2">
 
+          {/* 1. YÖNETİCİLER */}
+          <UserSection
+            title="Yöneticiler"
+            users={admins}
+            icon={Shield}
+            colorClass="text-red-700"
+            onEdit={setEditingUser}
+            onDelete={handleDeleteUser}
+          />
+
+          {/* 2. EĞİTMENLER */}
+          <UserSection
+            title="Eğitmenler / Koçlar"
+            users={coaches}
+            icon={CheckCircle}
+            colorClass="text-emerald-700"
+            onEdit={setEditingUser}
+            onDelete={handleDeleteUser}
+          />
+
+          {/* 3. ÖĞRENCİLER */}
+          <UserSection
+            title="Öğrenciler"
+            users={students}
+            icon={UserIcon}
+            colorClass="text-blue-700"
+            onEdit={setEditingUser}
+            onDelete={handleDeleteUser}
+          />
+
+        </div>
+      )}
+
+      {/* DÜZENLEME MODALI */}
       {editingUser && (
         <EditUserModal
           user={editingUser}
