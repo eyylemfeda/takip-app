@@ -1,29 +1,22 @@
-import type { NextConfig } from 'next'
-
-const securityHeaders = [
-  {
-    key: 'Content-Security-Policy',
-    value: `
-      default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline' https: blob:;
-      connect-src 'self' https: wss: blob: data:;
-      style-src 'self' 'unsafe-inline';
-      img-src 'self' data: blob: https:;
-    `.replace(/\s{2,}/g, ' ').trim(),
-  },
-]
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: securityHeaders,
-      },
-    ]
+  // --- MOBİL İÇİN EKLENEN ZORUNLU AYARLAR ---
+  output: 'export',        // Dosyaları HTML'e çevirir (Sunucuyu kapatır)
+  images: {
+    unoptimized: true,     // Resim optimizasyonunu kapatır (Next/Image hatasını önler)
   },
-}
 
-export default nextConfig
+  // --- SİZİN MEVCUT AYARLARINIZ (KORUNDU) ---
+  eslint: { 
+    ignoreDuringBuilds: true 
+  },
+  typescript: { 
+    ignoreBuildErrors: true 
+  },
+  
+  // headers() KISMI KALDIRILDI
+  // Çünkü statik export modunda sunucu headerları çalışmaz.
+};
+
+export default nextConfig;

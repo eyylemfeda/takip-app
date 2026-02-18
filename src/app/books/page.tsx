@@ -349,8 +349,8 @@ export default function BooksPage() {
             )}
 
             {/* Düzenle / Sil */}
-            <Link href={`/books/${b.id}/edit`} prefetch={false} className="rounded-lg border px-2 py-1 text-sm hover:bg-gray-50">
-              Düzenle
+            <Link href={`/books/edit?id=${b.id}`} prefetch={false} className="rounded-lg border px-2 py-1 text-sm hover:bg-gray-50">
+             Düzenle
             </Link>
             <button
               onClick={() => handleDelete(b.id)}
